@@ -1,0 +1,246 @@
+[inner]
+version = "1.11.0"
+
+# 配置文件版本号迭代规则同bot_config.toml
+
+[[api_providers]]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com/v1"
+api_key = "your-api-key-here"
+client_type = "openai"
+max_retry = 2
+timeout = 120
+retry_interval = 10
+
+[[api_providers]]
+name = "BaiLian"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "sk-bb1b02369b8e4130b95f8bab49c2e6f6"
+client_type = "openai"
+max_retry = 2
+timeout = 120
+retry_interval = 5
+
+[[api_providers]]
+name = "Google"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+api_key = "your-google-api-key-1"
+client_type = "gemini"
+max_retry = 2
+timeout = 120
+retry_interval = 10
+
+[[api_providers]]
+name = "SiliconFlow"
+base_url = "https://api.siliconflow.cn/v1"
+api_key = "sk-fmrhxnxxttyfytmwnvrpwooeedrrlnrsebhbmgyzzaemcflv"
+client_type = "openai"
+max_retry = 3
+timeout = 180
+retry_interval = 5
+[[models]]
+model_identifier = "deepseek-chat"
+name = "deepseek-v3"
+api_provider = "DeepSeek"
+price_in = 2
+price_out = 8
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "deepseek-ai/DeepSeek-V3.2-Exp"
+name = "siliconflow-deepseek-v3.2"
+api_provider = "SiliconFlow"
+price_in = 2
+price_out = 3
+force_stream_mode = false
+
+[models.extra_params]
+enable_thinking = false
+
+[[models]]
+model_identifier = "deepseek-ai/DeepSeek-V3.2-Exp"
+name = "siliconflow-deepseek-v3.2-think"
+api_provider = "SiliconFlow"
+price_in = 2
+price_out = 3
+force_stream_mode = false
+
+[models.extra_params]
+enable_thinking = true
+
+[[models]]
+model_identifier = "Qwen/Qwen3-Next-80B-A3B-Instruct"
+name = "qwen3-next-80b"
+api_provider = "SiliconFlow"
+price_in = 1
+price_out = 4
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "zai-org/GLM-4.6"
+name = "siliconflow-glm-4.6"
+api_provider = "SiliconFlow"
+price_in = 3.5
+price_out = 14
+force_stream_mode = false
+
+[models.extra_params]
+enable_thinking = false
+
+[[models]]
+model_identifier = "zai-org/GLM-4.6"
+name = "siliconflow-glm-4.6-think"
+api_provider = "SiliconFlow"
+price_in = 3.5
+price_out = 14
+force_stream_mode = false
+
+[models.extra_params]
+enable_thinking = true
+
+[[models]]
+model_identifier = "deepseek-ai/DeepSeek-R1"
+name = "siliconflow-deepseek-r1"
+api_provider = "SiliconFlow"
+price_in = 4
+price_out = 16
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+name = "qwen3-30b"
+api_provider = "SiliconFlow"
+price_in = 0.7
+price_out = 2.8
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "qwen-plus"
+name = "qwen-plus"
+api_provider = "BaiLian"
+price_in = 0.7
+price_out = 2.8
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+name = "qwen3-vl-30"
+api_provider = "SiliconFlow"
+price_in = 4.13
+price_out = 4.13
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "FunAudioLLM/SenseVoiceSmall"
+name = "sensevoice-small"
+api_provider = "SiliconFlow"
+price_in = 0
+price_out = 0
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "BAAI/bge-m3"
+name = "bge-m3"
+api_provider = "SiliconFlow"
+price_in = 0
+price_out = 0
+force_stream_mode = false
+
+[models.extra_params]
+[model_task_config.utils] # 在麦麦的一些组件中使用的模型，例如表情包模块，取名模块，关系模块，麦麦的情绪变化等，是麦麦必须的模型
+model_list = ["qwen-plus"] # 使用的模型列表，每个子项对应上面的模型名称(name)
+temperature = 0.2                        # 模型温度，新V3建议0.1-0.3
+max_tokens = 4096                         # 最大输出token数
+slow_threshold = 15                     # 慢请求阈值（秒），模型等待回复时间超过此值会输出警告日志
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.tool_use] #功能模型，需要使用支持工具调用的模型，请使用较快的小模型（调用量较大）
+model_list = [
+    "qwen3-30b",
+    "qwen3-next-80b",
+]
+temperature = 0.7
+max_tokens = 1024
+slow_threshold = 10
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.replyer] # 首要回复模型，还用于表达方式学习
+model_list = [
+    "siliconflow-deepseek-v3.2",
+    "siliconflow-deepseek-v3.2-think",
+    "siliconflow-glm-4.6",
+    "siliconflow-glm-4.6-think",
+]
+temperature = 0.3                        # 模型温度，新V3建议0.1-0.3
+max_tokens = 2048
+slow_threshold = 25
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.emotion] # 情绪计算与情绪相关任务模型（mood_manager等使用）
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.2
+max_tokens = 1024
+slow_threshold = 15
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.planner] #决策：负责决定麦麦该什么时候回复的模型
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.3
+max_tokens = 2000                        # 增加max_tokens以避免响应被截断，确保能输出完整的JSON格式动作规划
+slow_threshold = 12
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.schedule_generator] # 日程与月度计划生成模型（schedule_llm_generator 使用）
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.3
+max_tokens = 2048
+slow_threshold = 30
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.vlm] # 图像识别模型
+model_list = ["qwen3-vl-30"]
+max_tokens = 256
+slow_threshold = 15
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.voice] # 语音识别模型
+model_list = ["sensevoice-small"]
+slow_threshold = 12
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+# 嵌入模型
+
+[model_task_config.embedding]
+model_list = ["bge-m3"]
+slow_threshold = 5
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+# ------------LPMM知识库模型------------
+
+[model_task_config.lpmm_entity_extract] # 实体提取模型
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.2
+max_tokens = 800
+slow_threshold = 20
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
+[model_task_config.lpmm_rdf_build] # RDF构建模型
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.2
+max_tokens = 800
+slow_threshold = 20
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）

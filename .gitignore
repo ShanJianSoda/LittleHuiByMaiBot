@@ -38,11 +38,11 @@ queue_update.txt
 .env
 .env.*
 .cursor
-config/bot_config_dev.toml
-config/bot_config.toml
-config/bot_config.toml.bak
-config/lpmm_config.toml
-config/lpmm_config.toml.bak
+# config/bot_config_dev.toml
+# config/bot_config.toml
+# config/bot_config.toml.bak
+# config/lpmm_config.toml
+# config/lpmm_config.toml.bak
 template/compare/bot_config_template.toml
 template/compare/model_config_template.toml
 CLAUDE.md
@@ -254,7 +254,7 @@ logs
 
 .vscode
 
-/config/*
+# /config/*
 config/old/bot_config_20250405_212257.toml
 temp/
 
