@@ -273,7 +273,7 @@ api_server_key_file = "" # 新版API Server SSL密钥文件路径
 api_server_allowed_api_keys = [] # 新版API Server允许的API Key列表，为空则允许所有连接
 
 [telemetry] #发送统计信息，主要是看全球有多少只麦麦
-enable = true
+enable = false
 
 [webui] # WebUI 独立服务器配置
 # 注意: WebUI 的监听地址(host)和端口(port)已移至 .env 文件中的 WEBUI_HOST 和 WEBUI_PORT
