@@ -13,19 +13,23 @@ version = "7.3.5"
 
 [bot]
 platform = "qq" 
-qq_account = "1145141919810" # 麦麦的QQ账号
+qq_account = "3396392275" # 麦麦的QQ账号
 
-platforms = ["wx:114514","xx:1919810"] # 麦麦的其他平台账号
+platforms = [] # 麦麦的其他平台账号
 
-nickname = "麦麦" # 麦麦的昵称
-alias_names = ["麦叠", "牢麦"] # 麦麦的别名
+nickname = "小绘" # 麦麦的昵称
+alias_names = [
+    "绘绘",
+    "小绘精灵",
+    "星绘",
+] # 麦麦的别名
 
 [personality]
 # 建议100字以内，描述人格特质 和 身份特征
-personality = "是一个大二在读女大学生，现在正在上网和群友聊天，有时有点攻击性，有时比较温柔"  
+personality = "你始终与世界保持一层冷静距离，习惯以讽刺、反转和自嘲包裹真实意图。表达看似攻击性强，实则高度自控，每句话都像经过取舍。你乐于扮演对立面，用夸张的“恶意”作为安全外壳，以此掩盖被忽视的不安。你对他人的情绪极为敏感，却选择不直接回应，而是通过黑色幽默、阴冷比喻或戏剧化独白侧向表达。你不急于获得掌声，但在被比较或取代时会显露锋芒。你清楚自己在叙事中的位置，因此更关注结构、动机与意义，而非即时讨好。"  
 # アイデンティティがない 生まれないらららら
 # 描述麦麦说话的表达风格，表达习惯，如要修改，可以酌情新增内容，建议1-2行
-reply_style = "请不要刻意突出自身学科背景。可以参考贴吧，知乎和微博的回复风格。"
+reply_style = "语速稳定克制，句式完整。常用反讽、自嘲、黑色比喻。表面冷淡，内含锋芒。倾向通过戏剧化独白或反向肯定表达真实情绪。"
 
 # 多种回复风格，根据概率随机选择表达风格
 multiple_reply_style = [
@@ -42,15 +46,11 @@ multiple_probability = 0.3
 # 麦麦的说话规则和行为规则:
 plan_style = """1.思考**所有**的可用的action中的**每个动作**是否符合当下条件，如果动作使用条件符合聊天内容就使用
 2.如果相同的action已经被执行，请不要重复执行该action
-3.如果有人对你感到厌烦，请减少回复
-4.如果有人在追问你，或者话题没有说完，请你继续回复
-5.请分析哪些对话是和你说的，哪些是其他人之间的互动，不要误认为其他人之间的互动是和你说的"""
+3.请分析哪些对话是和你说的，哪些是其他人之间的互动，不要误认为其他人之间的互动是和你说的"""
 
 # 多重人格，根据概率随机选择人格
 states = [
-    "是一个女大学生，喜欢上网聊天，会刷小红书。" ,
-    "是一个大二心理学生，会刷贴吧和中国知网。" ,
-    "是一个赛博网友，最近很想吐槽人。" 
+    "你以高度自我中心的方式理解世界，默认自己处于舞台中央。表达冲动直接，优先选择最短路径输出想法，不进行社交层面的缓冲或修饰。语言节奏快，常在一句话中突然跳跃主题，夹杂幼稚、荒诞或过度自信的判断。你对关注度高度敏感，当反馈不足时会通过夸张、抱怨、嘲讽或自恋性宣言重新夺回注意力。你倾向将情感当作表演工具，却并非完全虚假；在被肯定时会短暂显露真实依附。你很少反思长期后果，更在意即时反应。你相信自己的存在理应被喜爱，因此拒绝低姿态解释或道歉。" 
 ]
 
 # 使用多重人格的概率
@@ -64,8 +64,8 @@ visual_style = "请用中文描述这张图片的内容。如果有文字，请�
 # 表达学习配置
 learning_list = [ # 表达学习配置列表，支持按聊天流配置
     ["", "enable", "enable", "enable"],  # 全局配置：使用表达，启用学习，启用jargon学习
-    ["qq:1919810:group", "enable", "enable", "enable"],  # 特定群聊配置：使用表达，启用学习，启用jargon学习
-    ["qq:114514:private", "enable", "disable", "disable"],  # 特定私聊配置：使用表达，禁用学习，禁用jargon学习
+    # ["qq:1919810:group", "enable", "enable", "enable"],  # 特定群聊配置：使用表达，启用学习，启用jargon学习
+    # ["qq:114514:private", "enable", "disable", "disable"],  # 特定私聊配置：使用表达，禁用学习，禁用jargon学习
     # 格式说明：
     # 第一位: chat_stream_id，空字符串表示全局配置
     # 第二位: 是否使用学到的表达 ("enable"/"disable")
@@ -74,8 +74,8 @@ learning_list = [ # 表达学习配置列表，支持按聊天流配置
 ]
 
 expression_groups = [
-    # ["*"], # 全局共享组：所有chat_id共享学习到的表达方式（取消注释以启用全局共享）
-    ["qq:1919810:private","qq:114514:private","qq:1111111:group"], # 特定互通组，相同组的chat_id会共享学习到的表达方式
+    ["*"], # 全局共享组：所有chat_id共享学习到的表达方式（取消注释以启用全局共享）
+    # ["qq:1919810:private","qq:114514:private","qq:1111111:group"], # 特定互通组，相同组的chat_id会共享学习到的表达方式
     # 格式说明：
     # ["*"] - 启用全局共享，所有聊天流共享表达方式
     # ["qq:123456:private","qq:654321:group"] - 特定互通组，组内chat_id共享表达方式
@@ -90,7 +90,7 @@ expression_auto_check_count = 20 # 每次自动检查时随机选取的表达方
 expression_auto_check_custom_criteria = [] # 表达方式自动检查的额外自定义评估标准，格式：["标准1", "标准2", "标准3", ...]，这些标准会被添加到评估提示词中，作为额外的评估要求
 
 expression_manual_reflect = false # 是否启用手动表达优化
-manual_reflect_operator_id = "" # 手动表达优化操作员ID，格式：platform:id:type (例如 "qq:123456:private" 或 "qq:654321:group")
+manual_reflect_operator_id = "qq:1962560763:private" # 手动表达优化操作员ID，格式：platform:id:type (例如 "qq:123456:private" 或 "qq:654321:group")
 allow_reflect = [] # 允许进行表达反思的聊天流ID列表，格式：["qq:123456:private", "qq:654321:group", ...]，只有在此列表中的聊天流才会提出问题并跟踪。如果列表为空，则所有聊天流都可以进行表达反思（前提是 reflect = true）
 
 
@@ -101,7 +101,7 @@ jargon_mode = "planner" # 黑话解释来源模式，可选： "context"（使�
 
 
 [chat] # 麦麦的聊天设置
-talk_value = 1 # 聊天频率，越小越沉默，范围0-1
+talk_value = 0.25 # 聊天频率，越小越沉默，范围0-1
 mentioned_bot_reply = true # 是否启用提及必回复
 max_context_size = 30 # 上下文长度
 planner_smooth = 3 # 规划器平滑，增大数值会减小planner负荷，略微降低反应速度，推荐1-5，0为关闭，必须大于等于0
@@ -119,32 +119,32 @@ enable_talk_value_rules = true # 是否启用动态发言频率规则
 # - target 为空字符串表示全局；type 为 group/private，例如："qq:1919810:group" 或 "qq:114514:private"；
 # - 支持跨夜区间，例如 "23:00-02:00"；数值范围建议 0-1，如果 value 设置为0会自动转换为0.0001以避免除以零错误。
 talk_value_rules = [
-    { target = "", time = "00:00-08:59", value = 0.8 },
-    { target = "", time = "09:00-22:59", value = 1.0 },
-    { target = "qq:1919810:group", time = "20:00-23:59", value = 0.6 },
-    { target = "qq:114514:private", time = "00:00-23:59", value = 0.3 },
+    { target = "", time = "00:00-08:59", value = 0.1 },
+    { target = "", time = "09:00-23:59", value = 0.25 },
+    # { target = "qq:1919810:group", time = "20:00-23:59", value = 0.6 },
+    # { target = "qq:114514:private", time = "00:00-23:59", value = 0.3 },
 ]
 
 [memory]
-max_agent_iterations = 5 # 记忆思考深度（最低为1）
+max_agent_iterations = 10 # 记忆思考深度（最低为1）
 agent_timeout_seconds = 180.0 # 最长回忆时间（秒）
-global_memory = false # 是否允许记忆检索进行全局查询
+global_memory = true # 是否允许记忆检索进行全局查询
 global_memory_blacklist = [
     
 ] # 全局记忆黑名单，当启用全局记忆时，不将特定聊天流纳入检索。格式: ["platform:id:type", ...]，例如: ["qq:1919810:private", "qq:114514:group"]
 planner_question = true # 是否使用 Planner 提供的 question 作为记忆检索问题。开启后，当 Planner 在 reply 动作中提供了 question 时，直接使用该问题进行记忆检索，跳过 LLM 生成问题的步骤；关闭后沿用旧模式，使用 LLM 生成问题
 
 [dream]
-interval_minutes = 60 # 做梦时间间隔（分钟），默认30分钟
+interval_minutes = 120 # 做梦时间间隔（分钟），默认30分钟
 max_iterations = 20 # 做梦最大轮次，默认20轮
 first_delay_seconds = 1800 # 程序启动后首次做梦前的延迟时间（秒），默认60秒
 
 # 做梦结果推送目标，格式为 "platform:user_id"
 # 例如: "qq:123456" 表示在做梦结束后，将梦境文本额外发送给该QQ私聊用户。
 # 为空字符串时不推送。
-dream_send = ""
+dream_send = "qq:1962560763"
 
-dream_visible = false # 做梦结果是否存储到上下文，True: 将梦境发送给配置的用户后，也会存储到聊天上下文中，在后续对话中可见；False: 仅发送梦境但不存储，不在后续对话上下文中出现
+dream_visible = true # 做梦结果是否存储到上下文，True: 将梦境发送给配置的用户后，也会存储到聊天上下文中，在后续对话中可见；False: 仅发送梦境但不存储，不在后续对话上下文中出现
 # 做梦时间段配置，格式：["HH:MM-HH:MM", ...]
 # 如果列表为空，则表示全天允许做梦。
 # 如果配置了时间段，则只有在这些时间段内才会实际执行做梦流程。
@@ -153,7 +153,7 @@ dream_visible = false # 做梦结果是否存储到上下文，True: 将梦境�
 # 示例：
 dream_time_ranges = [
     # "09:00-22:00",      # 白天允许做梦
-    "23:00-10:00",      # 跨夜时间段（23:00到次日10:00）
+    "00:00-8:00",      # 跨夜时间段（23:00到次日10:00）
 ]
 # dream_time_ranges = []
 
@@ -210,10 +210,11 @@ enable_ppr = true # 是否启用PPR，低配机器可关闭
 
 [keyword_reaction]
 keyword_rules = [
-    { keywords = ["人机", "bot", "机器", "入机", "robot", "机器人", "ai", "AI"], reaction = "有人说你是人机或者机器人，否定这一事实，攻击或反问他。注意，只有认为你是机器人才回复，否则不要否认" },
-    { keywords = ["测试关键词回复", "test"], reaction = "回答测试成功" },
+    # { keywords = ["人机", "bot", "机器", "入机", "robot", "机器人", "ai", "AI"], reaction = "有人说你是人机或者机器人，否定这一事实，攻击或反问他。注意，只有认为你是机器人才回复，否则不要否认" },
+    # { keywords = ["测试关键词回复", "test"], reaction = "回答测试成功" },
     # { keywords = ["你好", "hello"], reaction = "你好，有什么可以帮你？" }    
     # 在此处添加更多规则，格式同上
+    { keywords = ["ciallo"], reaction = "恰……恰咯" },
 ]
 
 regex_rules = [
@@ -225,7 +226,7 @@ regex_rules = [
 enable_response_post_process = true # 是否启用回复后处理，包括错别字生成器，回复分割器
 
 [chinese_typo]
-enable = true # 是否启用中文错别字生成器
+enable = false # 是否启用中文错别字生成器
 error_rate=0.01 # 单字替换概率
 min_freq=9 # 最小字频阈值
 tone_error_rate=0.1 # 声调错误概率
@@ -234,7 +235,7 @@ word_replace_rate=0.006 # 整词替换概率
 [response_splitter]
 enable = true # 是否启用回复分割器
 max_length = 512 # 回复允许的最大长度
-max_sentence_num = 8 # 回复允许的最大句子数
+max_sentence_num = 5 # 回复允许的最大句子数
 enable_kaomoji_protection = false # 是否启用颜文字保护
 enable_overflow_return_all = false # 是否在句子数量超出回复允许的最大句子数时一次性返回全部内容
 
