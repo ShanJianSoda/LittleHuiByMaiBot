@@ -59,7 +59,6 @@ state_probability = 0.3
 # 麦麦识图规则，不建议修改
 visual_style = "请用中文描述这张图片的内容。如果有文字，请把文字描述概括出来，请留意其主题，直观感受，输出为一段平文本，最多30字，请注意不要分点，就输出一段文本"
 
-
 [expression]
 # 表达学习配置
 learning_list = [ # 表达学习配置列表，支持按聊天流配置
@@ -93,12 +92,9 @@ expression_manual_reflect = false # 是否启用手动表达优化
 manual_reflect_operator_id = "qq:1962560763:private" # 手动表达优化操作员ID，格式：platform:id:type (例如 "qq:123456:private" 或 "qq:654321:group")
 allow_reflect = [] # 允许进行表达反思的聊天流ID列表，格式：["qq:123456:private", "qq:654321:group", ...]，只有在此列表中的聊天流才会提出问题并跟踪。如果列表为空，则所有聊天流都可以进行表达反思（前提是 reflect = true）
 
-
 all_global_jargon = true # 是否开启全局黑话模式，注意，此功能关闭后，已经记录的全局黑话不会改变，需要手动删除
 enable_jargon_explanation = true # 是否在回复前尝试对上下文中的黑话进行解释（关闭可减少一次LLM调用，仅影响回复前的黑话匹配与解释，不影响黑话学习）
 jargon_mode = "planner" # 黑话解释来源模式，可选： "context"（使用上下文自动匹配黑话） 或 "planner"（仅使用Planner在reply动作中给出的unknown_words列表）
-
-
 
 [chat] # 麦麦的聊天设置
 talk_value = 0.25 # 聊天频率，越小越沉默，范围0-1
@@ -167,7 +163,6 @@ mood_update_threshold = 1 # 情绪更新阈值，作为整体概率缩放系数�
 [tool]
 enable_tool = true # 是否启用工具
 
-
 [emoji]
 emoji_chance = 0.4 # 麦麦激活表情包动作的概率
 max_reg_num = 100 # 表情包最大注册数量
@@ -191,7 +186,6 @@ ban_msgs_regex = [
     # "https?://[^\\s]+", # 匹配https链接
     # "\\d{4}-\\d{2}-\\d{2}", # 匹配日期
 ]
-
 
 [lpmm_knowledge] # lpmm知识库配置
 enable = false # 是否启用lpmm知识库
@@ -226,7 +220,7 @@ keyword_rules = [
 
 regex_rules = [
     { regex = ["^(?P<n>\\S{1,20})是这样的$"], reaction = "请按照以下模板造句：[n]是这样的，xx只要xx就可以，可是[n]要考虑的事情就很多了，比如什么时候xx，什么时候xx，什么时候xx。（请自由发挥替换xx部分，只需保持句式结构，同时表达一种将[n]过度重视的反讽意味）" },
-    { regex = ["(?:[^，。.\\s]+，\\s*)?我(?:也)?[没沒]要求你\\s*(?P<action>.+?)[.。,，]?$"],reaction = "进行一次“八岐大蛇定型文”补完。暂时忽略回复风格，进入“粉絲吐槽”模式。请严格按照以下“填空模板”，围绕“[action]”进行创作，使其充满滑稽的夸张感和天马行空的联想：我没要求你[action]，我不是(与action关联的、宽容的角色)。可是，(与action相关的具体负面行为)是什么意思？你的(与action相关的某种观念)怎么了？你才(与action相关的某个状态或时间点)吧？再这样下去，你(一个中期的、等比级数式的滑稽推演)，(一个后期的、等比级数式的滑稽推演)，最后就变成(一个与主题相关的、夸张的最终形态)了。作为(与最终形态相关的、克星或权威身份)，我可能得(对你执行一个天罚般的行动)。真的。"}
+    { regex = ["(?:[^，。.\\s]+，\\s*)?我(?:也)?[没沒]要求你\\s*(?P<action>.+?)[.。,，]?$"],reaction = "进行一次“八岐大蛇定型文”补完。暂时忽略回复风格，进入“粉絲吐槽”模式。请严格按照以下“填空模板”，围绕“[action]”进行创作，使其充满滑稽的夸张感和天马行空的联想：我没要求你[action]，我不是(与action关联的、宽容的角色)。可是，(与action相关的具体负面行为)是什么意思？你的(与action相关的某种观念)怎么了？你才(与action相关的某个状态或时间点)吧？再这样下去，你(一个中期的、等比级数式的滑稽推演)，(一个后期的、等比级数式的滑稽推演)，最后就变成(一个与主题相关的、夸张的最终形态)了。作为(与最终形态相关的、克星或权威身份)，我可能得(对你执行一个天罚般的行动)。真的。"},
 ]
 
 [response_post_process]
@@ -255,7 +249,19 @@ console_log_level = "INFO" # 控制台日志级别，可选: DEBUG, INFO, WARNIN
 file_log_level = "DEBUG" # 文件日志级别，可选: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # 第三方库日志控制
-suppress_libraries = ["faiss","httpx", "urllib3", "asyncio", "websockets", "httpcore", "requests", "peewee", "openai","uvicorn","jieba"] # 完全屏蔽的库
+suppress_libraries = [
+    "faiss",
+    "httpx",
+    "urllib3",
+    "asyncio",
+    "websockets",
+    "httpcore",
+    "requests",
+    "peewee",
+    "openai",
+    "uvicorn",
+    "jieba",
+] # 完全屏蔽的库
 library_log_levels = { aiohttp = "WARNING"} # 设置特定库的日志级别
 
 [debug]
@@ -314,7 +320,7 @@ private_plan_style = """
 # ]
 chat_prompts = []
 
-
 # 此系统暂时移除，无效配置
+
 [relationship]
 enable_relationship = true # 是否启用关系系统
