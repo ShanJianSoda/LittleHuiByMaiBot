@@ -157,6 +157,13 @@ dream_time_ranges = [
 ]
 # dream_time_ranges = []
 
+
+[mood]
+# 情绪系统配置
+enable_mood = true # 是否启用情绪系统
+mood_update_threshold = 1 # 情绪更新阈值，作为整体概率缩放系数，建议范围 0.1-2.0
+
+
 [tool]
 enable_tool = true # 是否启用工具
 

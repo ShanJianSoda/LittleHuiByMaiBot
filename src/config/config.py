@@ -35,6 +35,7 @@ from src.config.official_configs import (
     DebugConfig,
     DreamConfig,
     WebUIConfig,
+    MoodConfig,
 )
 
 from .api_ada_configs import (
@@ -357,6 +358,9 @@ class Config(ConfigBase):
     debug: DebugConfig
     voice: VoiceConfig
     dream: DreamConfig
+
+    mood: MoodConfig
+    """情绪系统配置"""
 
 
 @dataclass

@@ -9,6 +9,7 @@ from src.chat.utils.statistic import OnlineTimeRecordTask, StatisticOutputTask
 # from src.chat.utils.token_statistics import TokenStatisticsTask
 from src.chat.emoji_system.emoji_manager import get_emoji_manager
 from src.chat.message_receive.chat_stream import get_chat_manager
+from src.mood.mood_manager import mood_manager
 from src.config.config import global_config
 from src.chat.message_receive.bot import chat_bot
 from src.common.logger import get_logger
@@ -107,6 +108,10 @@ class MainSystem:
         # 初始化表情管理器
         get_emoji_manager().initialize()
         logger.info("表情包管理器初始化成功")
+
+        # 启动情绪管理器
+        await mood_manager.start()
+        logger.debug("情绪管理器初始化成功")
 
         # 初始化聊天管理器
         await get_chat_manager()._initialize()

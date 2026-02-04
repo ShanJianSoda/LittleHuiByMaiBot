@@ -308,12 +308,12 @@ def raw_main():
         time.tzset()  # type: ignore
 
     # 打印开源提示（防止倒卖）
-    print_opensource_notice()
+    # print_opensource_notice()
 
     check_eula()
     logger.info("检查EULA和隐私条款完成")
 
-    easter_egg()
+    # easter_egg()
 
     # 返回MainSystem实例
     return MainSystem()

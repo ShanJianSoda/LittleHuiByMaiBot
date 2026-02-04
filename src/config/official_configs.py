@@ -916,3 +916,17 @@ class DreamConfig(ConfigBase):
             raise ValueError(f"max_iterations 必须至少为1，当前值: {self.max_iterations}")
         if self.first_delay_seconds < 0:
             raise ValueError(f"first_delay_seconds 不能为负数，当前值: {self.first_delay_seconds}")
+
+
+@dataclass
+class MoodConfig(ConfigBase):
+    """情绪系统配置类
+
+    为 src.mood.mood_manager 提供启用开关和更新阈值。
+    """
+
+    enable_mood: bool = True
+    """是否启用情绪系统"""
+
+    mood_update_threshold: float = 1.0
+    """情绪更新阈值，用作整体概率缩放系数，建议范围 0.1-2.0"""

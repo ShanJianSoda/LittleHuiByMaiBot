@@ -460,6 +460,8 @@ def build_readable_messages_to_str(
     Returns:
         格式化后的可读字符串
     """
+    # todo: dict[str, Any] to DatabaseMessages
+
     return build_readable_messages(messages, replace_bot_name, timestamp_mode, read_mark, truncate, show_actions)
 
 
