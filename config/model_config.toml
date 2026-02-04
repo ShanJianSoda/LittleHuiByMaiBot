@@ -197,6 +197,13 @@ max_tokens = 1024
 slow_threshold = 15
 selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
 
+[model_task_config.mood] # 心情状态更新与回归模型（mood_manager 使用）
+model_list = ["siliconflow-deepseek-v3.2"]
+temperature = 0.2
+max_tokens = 1024
+slow_threshold = 15
+selection_strategy = "random"           # 模型选择策略：balance（负载均衡）或 random（随机选择）
+
 [model_task_config.planner] #决策：负责决定麦麦该什么时候回复的模型
 model_list = ["siliconflow-deepseek-v3.2"]
 temperature = 0.3
