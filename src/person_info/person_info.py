@@ -704,7 +704,7 @@ class PersonInfoManager:
         while current_try < max_retries:
             bot_name = global_config.bot.nickname
 
-            qv_name_prompt = f"你是{bot_name}，一个伪装成人类的AI，你不能让别人发现这一点，"
+            qv_name_prompt = f"你是{bot_name}，一个AI"
             qv_name_prompt += f"现在你想给一个用户取一个昵称，用户的qq昵称是{user_nickname}，"
             qv_name_prompt += f"用户的qq群昵称名是{user_cardname}，"
             if user_avatar:
