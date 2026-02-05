@@ -413,22 +413,23 @@ class ChatHistorySummarizer:
             f"{self.log_prefix} 开始话题检查 | 消息数: {len(messages)} | 时间范围: {start_time:.2f} - {end_time:.2f}"
         )
 
+        # 水群模式下，不检查是否有 bot 发言
         # 1. 检查当前批次内是否有 bot 发言（只检查当前批次，不往前推）
         # 原因：我们要记录的是 bot 参与过的对话片段，如果当前批次内 bot 没有发言，
         # 说明 bot 没有参与这段对话，不应该记录
-        has_bot_message = False
+        # has_bot_message = False
 
-        for msg in messages:
-            # 使用统一的 is_bot_self 函数判断是否是机器人自己（支持多平台，包括 WebUI）
-            if is_bot_self(msg.user_info.platform, msg.user_info.user_id):
-                has_bot_message = True
-                break
+        # for msg in messages:
+        #     # 使用统一的 is_bot_self 函数判断是否是机器人自己（支持多平台，包括 WebUI）
+        #     if is_bot_self(msg.user_info.platform, msg.user_info.user_id):
+        #         has_bot_message = True
+        #         break
 
-        if not has_bot_message:
-            logger.info(
-                f"{self.log_prefix} 当前批次内无 Bot 发言，丢弃本次检查 | 时间范围: {start_time:.2f} - {end_time:.2f}"
-            )
-            return
+        # if not has_bot_message:
+        #     logger.info(
+        #         f"{self.log_prefix} 当前批次内无 Bot 发言，丢弃本次检查 | 时间范围: {start_time:.2f} - {end_time:.2f}"
+        #     )
+        #     return
 
         # 2. 构造编号后的消息字符串和参与者信息
         numbered_lines, index_to_msg_str, index_to_msg_text, index_to_participants = (
@@ -830,6 +831,9 @@ class ChatHistorySummarizer:
         logger.info(
             f"{self.log_prefix} 话题[{topic}] 成功打包并存储 | 消息数: {len(item.messages)} | 参与者数: {len(participants)}"
         )
+
+        # todo: 异步，更新人物关系
+
 
     async def _compress_with_llm(self, original_text: str, topic: str) -> tuple[bool, List[str], str, List[str]]:
         """
