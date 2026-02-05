@@ -537,3 +537,10 @@ def register_tool():
         ],
         execute_func=get_chat_history_detail,
     )
+
+
+def test_search_chat_history():
+    print(search_chat_history("麦麦 百度网盘"))
+
+if __name__ == "__main__":
+    test_search_chat_history()
