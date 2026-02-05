@@ -475,6 +475,10 @@ async def get_chat_history_detail(chat_id: str, memory_ids: str) -> str:
                 except (json.JSONDecodeError, TypeError, ValueError):
                     pass
 
+            # todo: 是否需要添加原文 (token 爆炸)
+            # if record.original_text:
+            #     result_parts.append(f"原文：{record.original_text}")
+
             results.append("\n".join(result_parts))
 
         if not results:
