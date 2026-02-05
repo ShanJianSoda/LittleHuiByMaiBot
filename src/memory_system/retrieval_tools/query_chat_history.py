@@ -539,8 +539,14 @@ def register_tool():
     )
 
 
-def test_search_chat_history():
-    print(search_chat_history("麦麦 百度网盘"))
+async def main():
+    result = await search_chat_history(
+        chat_id="8e506d5cf35fc1428dc51700505cc489",
+        keyword="生日 空梦"
+    )
+    print(result)
 
 if __name__ == "__main__":
-    test_search_chat_history()
+    import asyncio
+    
+    asyncio.run(main())
