@@ -90,7 +90,7 @@ class MainSystem:
         await async_task_manager.add_task(StatisticOutputTask())
 
         # 添加遥测心跳任务
-        await async_task_manager.add_task(TelemetryHeartBeatTask())
+        # await async_task_manager.add_task(TelemetryHeartBeatTask())
 
         # 添加表达方式自动检查任务
         await async_task_manager.add_task(ExpressionAutoCheckTask())
