@@ -310,7 +310,7 @@ class MoodRegressionTask(AsyncTask):
                 new_state_text = vad_to_bucket(new_v, new_a, new_d)
                 self.mood_manager.mood.mood_state = new_state_text
                 record_emotion_change("global", new_state_text, "regress", now, v=new_v, a=new_a, d=new_d)
-                logger.debug("情绪回归(VAD) 全局 tick 完成: %s", new_state_text)
+                logger.debug(f"情绪回归(VAD) 全局 tick 完成: {new_state_text}")
             return
 
         mood = self.mood_manager.mood

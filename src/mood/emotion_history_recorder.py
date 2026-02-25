@@ -45,6 +45,6 @@ def record_emotion_change(
             a=a,
             d=d,
         )
-        logger.debug("emotion_history 已记录: chat_id=%s source=%s ts=%s", chat_id, source, ts)
+        logger.debug(f"emotion_history 已记录: chat_id={chat_id} source={source} ts={ts}")
     except Exception as e:
-        logger.warning("emotion_history 写入失败（不影响情绪更新）: %s", e)
+        logger.warning(f"emotion_history 写入失败（不影响情绪更新）: {e}")
