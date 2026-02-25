@@ -282,6 +282,9 @@ class MemoryConfig(ConfigBase):
     - 当在黑名单中的聊天流进行查询时，仅使用该聊天流的本地记忆
     """
 
+    enable_emotion_weight_in_retrieval: bool = False
+    """是否在 ChatHistory 检索结果中按情绪唤醒（emotion_a）加权排序，高情绪话题相对靠前"""
+
     planner_question: bool = True
     """
     是否使用 Planner 提供的 question 作为记忆检索问题
@@ -922,7 +925,7 @@ class DreamConfig(ConfigBase):
 class MoodConfig(ConfigBase):
     """情绪系统配置类
 
-    为 src.mood.mood_manager 提供启用开关和更新阈值。
+    为 src.mood.mood_manager 提供启用开关、更新阈值与情绪历史记录开关。
     """
 
     enable_mood: bool = True
@@ -930,3 +933,9 @@ class MoodConfig(ConfigBase):
 
     mood_update_threshold: float = 1.0
     """情绪更新阈值，用作整体概率缩放系数，建议范围 0.1-2.0"""
+
+    enable_emotion_history: bool = False
+    """是否将每次情绪变更写入 emotion_history 表（用于曲线、熔岩灯、chat_history 情绪回溯）"""
+
+    use_vad_path: bool = False
+    """为 True 时，情绪更新/回归走 VAD 词典+动力学（不调 LLM）；为 False 时保持原有 LLM 生成。VAD 状态按 chat 懒加载初始化 [0,0,0]。"""

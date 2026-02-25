@@ -280,6 +280,15 @@ async def search_chat_history(
             if matched:
                 filtered_records.append(record)
 
+        # 可选：按情绪唤醒加权排序，高情绪话题相对靠前（高情绪高唤醒率）
+        if filtered_records and getattr(global_config.memory, "enable_emotion_weight_in_retrieval", False):
+            def _emotion_sort_key(r):
+                emotion_a = getattr(r, "emotion_a", None)
+                intensity = abs(emotion_a) if emotion_a is not None else 0.0
+                return (-r.start_time, -intensity)
+
+            filtered_records.sort(key=_emotion_sort_key)
+
         if not filtered_records:
             # 构建查询条件描述
             conditions = []

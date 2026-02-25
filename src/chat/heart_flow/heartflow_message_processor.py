@@ -9,6 +9,9 @@ from src.chat.heart_flow.heartflow import heartflow
 from src.chat.utils.utils import is_mentioned_bot_in_message
 from src.chat.utils.chat_message_builder import replace_user_references
 from src.common.logger import get_logger
+from src.common.message_repository import find_messages
+from src.config.config import global_config
+from src.mood.mood_manager import mood_manager
 from src.person_info.person_info import Person
 from src.common.database.database_model import Images
 
@@ -56,6 +59,36 @@ class HeartFCMessageReceiver:
             message.reply_probability_boost = reply_probability_boost
 
             await self.storage.store_message(message, chat)
+
+            # P1 接入：消息入库后触发情绪更新（仅影响 mood，不阻塞主流程）
+            if getattr(global_config.mood, "enable_mood", True):
+                try:
+                    db_messages = find_messages(
+                        message_filter={
+                            "chat_id": chat.stream_id,
+                            "message_id": message.message_info.message_id,
+                        },
+                        limit=1,
+                        limit_mode="latest",
+                        filter_bot=False,
+                        filter_command=False,
+                    )
+                    if db_messages:
+                        db_message = db_messages[-1]
+                        # interest 当前尚未统一接线，先用可用信号构造：
+                        # 1) message.interest_value 2) 提及概率提升 3) 未提及时默认基线
+                        raw_interest = db_message.interest_value if db_message.interest_value is not None else 0.0
+                        raw_interest = max(float(raw_interest), float(reply_probability_boost or 0.0))
+                        if message.is_at or message.is_mentioned:
+                            raw_interest = max(raw_interest, 1.0)
+                        elif raw_interest <= 0.0:
+                            raw_interest = 0.35
+                        interested_rate = max(0.0, min(1.0, raw_interest))
+
+                        chat_mood = mood_manager.get_mood_by_chat_id(chat.stream_id)
+                        await chat_mood.update_mood_by_message(db_message, interested_rate=interested_rate)
+                except Exception as mood_e:
+                    logger.warning(f"情绪更新失败（不影响主流程）: {mood_e}")
 
             await heartflow.get_or_create_heartflow_chat(chat.stream_id)  # type: ignore
 

@@ -4,10 +4,11 @@
 """
 
 import asyncio
-import json
-import time
-import re
 import difflib
+import json
+import math
+import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from dataclasses import dataclass, field
@@ -15,12 +16,12 @@ from json_repair import repair_json
 
 from src.common.logger import get_logger
 from src.common.data_models.database_data_model import DatabaseMessages
-from src.config.config import model_config
+from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
 from src.plugin_system.apis import message_api
 from src.chat.utils.chat_message_builder import build_readable_messages
 from src.chat.utils.utils import is_bot_self
-from src.person_info.person_info import Person
+from src.person_info.person_info import Person, store_person_memory_from_answer
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.prompt_builder import Prompt, global_prompt_manager
 
@@ -48,14 +49,19 @@ def init_prompt():
 
 **选取消息**
 1. 对于每个话题（新话题或历史话题），从上述带编号的消息中选出与该话题强相关的消息编号列表；
-2. 每个话题用一句话清晰地描述正在发生的事件，必须包含时间（大致即可）、人物、主要事件和主题，保证精准且有区分度； 
+2. 每个话题用一句话清晰地描述正在发生的事件，必须包含时间（大致即可）、人物、主要事件和主题，保证精准且有区分度；
+
+**分类（可选）**
+3. 为每个话题指定一个记忆分类（category），用于后续人物关系沉淀。若无法判断则填「其他」。
+   可选分类：工作、生活、偏好、情感、娱乐、学习、其他（仅限以上之一）。
 
 请先输出一段简短思考，说明有什么话题，哪些是不包含在历史话题中的，哪些是包含在历史话题中的，并说明为什么；
 然后严格以 JSON 格式输出【本次聊天记录】中涉及的话题，格式如下：
 [
   {{
     "topic": "话题",
-    "message_indices": [1, 2, 5]
+    "message_indices": [1, 2, 5],
+    "category": "分类"
   }},
   ...
 ]
@@ -100,6 +106,11 @@ class MessageBatch:
     end_time: float
 
 
+# 人物记忆可选分类（与 topic_analysis prompt 一致，供写关系时校验）
+MEMORY_CATEGORY_OPTIONS = ("工作", "生活", "偏好", "情感", "娱乐", "学习", "其他")
+DEFAULT_MEMORY_CATEGORY = "其他"
+
+
 @dataclass
 class TopicCacheItem:
     """
@@ -110,12 +121,14 @@ class TopicCacheItem:
         messages: 与该话题相关的消息字符串列表（已经通过 build 函数转成可读文本）
         participants: 涉及到的发言人昵称集合
         no_update_checks: 连续多少次“检查”没有新增内容
+        category: 记忆分类，用于写关系时传入 store_person_memory_from_answer
     """
 
     topic: str
     messages: List[str] = field(default_factory=list)
     participants: Set[str] = field(default_factory=set)
     no_update_checks: int = 0
+    category: str = DEFAULT_MEMORY_CATEGORY
 
 
 class ChatHistorySummarizer:
@@ -192,11 +205,15 @@ class ChatHistorySummarizer:
             topics_data = data.get("topics", {})
             loaded_count = 0
             for topic, payload in topics_data.items():
+                cat = payload.get("category", DEFAULT_MEMORY_CATEGORY)
+                if cat not in MEMORY_CATEGORY_OPTIONS:
+                    cat = DEFAULT_MEMORY_CATEGORY
                 self.topic_cache[topic] = TopicCacheItem(
                     topic=topic,
                     messages=payload.get("messages", []),
                     participants=set(payload.get("participants", [])),
                     no_update_checks=payload.get("no_update_checks", 0),
+                    category=cat,
                 )
                 loaded_count += 1
 
@@ -262,6 +279,7 @@ class ChatHistorySummarizer:
                         "messages": item.messages,
                         "participants": list(item.participants),
                         "no_update_checks": item.no_update_checks,
+                        "category": item.category,
                     }
                     for topic, item in self.topic_cache.items()
                 },
@@ -436,16 +454,17 @@ class ChatHistorySummarizer:
             self._build_numbered_messages_for_llm(messages)
         )
 
-        # 3. 调用 LLM 识别话题，并得到 topic -> indices（失败时最多重试 3 次）
+        # 3. 调用 LLM 识别话题，并得到 topic -> indices、topic -> category（失败时最多重试 3 次）
         existing_topics = list(self.topic_cache.keys())
         max_retries = 3
         attempt = 0
         success = False
         topic_to_indices: Dict[str, List[int]] = {}
+        topic_to_category: Dict[str, str] = {}
 
         while attempt < max_retries:
             attempt += 1
-            success, topic_to_indices = await self._analyze_topics_with_llm(
+            success, topic_to_indices, topic_to_category = await self._analyze_topics_with_llm(
                 numbered_lines=numbered_lines,
                 existing_topics=existing_topics,
             )
@@ -470,24 +489,25 @@ class ChatHistorySummarizer:
         # 3.5. 检查新话题是否与历史话题相似（相似度>=90%则使用历史标题）
         topic_mapping = self._build_topic_mapping(topic_to_indices, similarity_threshold=0.9)
 
-        # 应用话题映射：将相似的新话题标题替换为历史话题标题
+        # 应用话题映射：将相似的新话题标题替换为历史话题标题，并同步 category
         if topic_mapping:
             new_topic_to_indices: Dict[str, List[int]] = {}
+            new_topic_to_category: Dict[str, str] = {}
             for new_topic, indices in topic_to_indices.items():
-                # 如果这个新话题需要映射到历史话题
+                cat = topic_to_category.get(new_topic, DEFAULT_MEMORY_CATEGORY)
                 if new_topic in topic_mapping:
                     historical_topic = topic_mapping[new_topic]
-                    # 如果历史话题已经存在，合并消息索引
                     if historical_topic in new_topic_to_indices:
-                        # 合并索引并去重
                         combined_indices = list(set(new_topic_to_indices[historical_topic] + indices))
                         new_topic_to_indices[historical_topic] = combined_indices
                     else:
                         new_topic_to_indices[historical_topic] = indices
+                    new_topic_to_category[historical_topic] = cat or new_topic_to_category.get(historical_topic, DEFAULT_MEMORY_CATEGORY)
                 else:
-                    # 不需要映射，保持原样
                     new_topic_to_indices[new_topic] = indices
+                    new_topic_to_category[new_topic] = cat
             topic_to_indices = new_topic_to_indices
+            topic_to_category = new_topic_to_category
 
         # 4. 统计哪些话题在本次检查中有新增内容
         updated_topics: Set[str] = set()
@@ -498,9 +518,16 @@ class ChatHistorySummarizer:
 
             item = self.topic_cache.get(topic)
             if not item:
-                # 新话题
-                item = TopicCacheItem(topic=topic)
+                cat = topic_to_category.get(topic, DEFAULT_MEMORY_CATEGORY)
+                if cat not in MEMORY_CATEGORY_OPTIONS:
+                    cat = DEFAULT_MEMORY_CATEGORY
+                item = TopicCacheItem(topic=topic, category=cat)
                 self.topic_cache[topic] = item
+            else:
+                # 用本次 LLM 的 category 更新（可选）
+                cat = topic_to_category.get(topic)
+                if cat and cat in MEMORY_CATEGORY_OPTIONS:
+                    item.category = cat
 
             # 收集属于该话题的消息文本（不带编号）
             topic_msg_texts: List[str] = []
@@ -682,25 +709,20 @@ class ChatHistorySummarizer:
         self,
         numbered_lines: List[str],
         existing_topics: List[str],
-    ) -> tuple[bool, Dict[str, List[int]]]:
+    ) -> tuple[bool, Dict[str, List[int]], Dict[str, str]]:
         """
-        使用 LLM 识别本次检查中的话题，并为每个话题选择相关消息编号。
+        使用 LLM 识别本次检查中的话题，并为每个话题选择相关消息编号与分类。
 
+        返回：(成功?, topic->indices, topic->category)
         要求：
         - 话题用一句话清晰描述正在发生的事件，包括时间、人物、主要事件和主题；
         - 可以有 1 个或多个话题；
         - 若某个话题与历史话题列表中的某个话题是同一件事，请直接使用历史话题的字符串；
-        - 输出 JSON，格式：
-          [
-            {
-              "topic": "话题标题字符串",
-              "message_indices": [1, 2, 5]
-            },
-            ...
-          ]
+        - 每个话题可带 category，可选：工作、生活、偏好、情感、娱乐、学习、其他；
+        - 输出 JSON 格式见 hippo_topic_analysis_prompt。
         """
         if not numbered_lines:
-            return False, {}
+            return False, {}, {}
 
         history_topics_block = "\n".join(f"- {t}" for t in existing_topics) if existing_topics else "（当前无历史话题）"
         messages_block = "\n".join(numbered_lines)
@@ -756,16 +778,21 @@ class ChatHistorySummarizer:
 
             if not isinstance(result, list):
                 logger.error(f"{self.log_prefix} 话题识别返回的 JSON 不是列表: {result}")
-                return False, {}
+                return False, {}, {}
 
             topic_to_indices: Dict[str, List[int]] = {}
+            topic_to_category: Dict[str, str] = {}
             for item in result:
                 if not isinstance(item, dict):
                     continue
                 topic = item.get("topic")
                 indices = item.get("message_indices") or item.get("messages") or []
+                raw_cat = item.get("category")
                 if not topic or not isinstance(topic, str):
                     continue
+                cat = (raw_cat if isinstance(raw_cat, str) else str(raw_cat or "")).strip() or DEFAULT_MEMORY_CATEGORY
+                if cat not in MEMORY_CATEGORY_OPTIONS:
+                    cat = DEFAULT_MEMORY_CATEGORY
                 if isinstance(indices, list):
                     valid_indices: List[int] = []
                     for v in indices:
@@ -777,13 +804,14 @@ class ChatHistorySummarizer:
                             continue
                     if valid_indices:
                         topic_to_indices[topic] = valid_indices
+                        topic_to_category[topic] = cat
 
-            return True, topic_to_indices
+            return True, topic_to_indices, topic_to_category
 
         except Exception as e:
             logger.error(f"{self.log_prefix} 话题识别 LLM 调用或解析失败: {e}")
             logger.error(f"{self.log_prefix} LLM响应: {response if 'response' in locals() else 'N/A'}")
-            return False, {}
+            return False, {}, {}
 
     async def _finalize_and_store_topic(
         self,
@@ -832,7 +860,20 @@ class ChatHistorySummarizer:
             f"{self.log_prefix} 话题[{topic}] 成功打包并存储 | 消息数: {len(item.messages)} | 参与者数: {len(participants)}"
         )
 
-        # todo: 异步，更新人物关系
+        # 写关系：若启用，为每位参与者写入一条话题级记忆（带 category）
+        if getattr(global_config.relationship, "enable_relationship", False):
+            memory_content = summary
+            if key_point:
+                memory_content = summary + "\n" + "\n".join(key_point[:3])
+            cat = item.category if item.category in MEMORY_CATEGORY_OPTIONS else DEFAULT_MEMORY_CATEGORY
+            for person_name in participants:
+                if person_name and str(person_name).strip():
+                    await store_person_memory_from_answer(
+                        person_name=str(person_name).strip(),
+                        memory_content=memory_content[:500],
+                        chat_id=self.chat_id,
+                        category=cat,
+                    )
 
 
     async def _compress_with_llm(self, original_text: str, topic: str) -> tuple[bool, List[str], str, List[str]]:
@@ -946,8 +987,9 @@ class ChatHistorySummarizer:
     ):
         """存储到数据库"""
         try:
-            from src.common.database.database_model import ChatHistory
+            from src.common.database.database_model import ChatHistory, EmotionHistory
             from src.plugin_system.apis import database_api
+            from src.mood.mood_estimator import estimate_from_lexicon
 
             # 准备数据
             data = {
@@ -965,6 +1007,62 @@ class ChatHistorySummarizer:
             # 存储 key_point（如果存在）
             if key_point is not None:
                 data["key_point"] = json.dumps(key_point, ensure_ascii=False)
+
+            # todo：如何优化
+            # 话题情绪 VAD：基于原文估计，供检索时高情绪高唤醒率使用
+            text_for_vad = (original_text or "")[:2000]
+            if text_for_vad.strip():
+                v, a, d, conf = estimate_from_lexicon(text_for_vad)
+                if conf > 0 and all(math.isfinite(x) for x in (v, a, d)):
+                    data["emotion_v"] = round(max(-1.0, min(1.0, v)), 4)
+                    data["emotion_a"] = round(max(-1.0, min(1.0, a)), 4)
+                    data["emotion_d"] = round(max(-1.0, min(1.0, d)), 4)
+
+            # P1 接入：补充“该话题时间窗内 bot 的情绪”。
+            # 优先使用当前 chat_id 的 EmotionHistory；若无数据再回退 global（VAD 全局回归场景）。
+            bot_emotion_query = (
+                EmotionHistory.select()
+                .where(
+                    (EmotionHistory.chat_id == self.chat_id)
+                    & (EmotionHistory.ts >= float(start_time))
+                    & (EmotionHistory.ts <= float(end_time))
+                )
+                .order_by(EmotionHistory.ts.asc())
+            )
+            bot_emotions = list(bot_emotion_query)
+            if not bot_emotions:
+                global_query = (
+                    EmotionHistory.select()
+                    .where(
+                        (EmotionHistory.chat_id == "global")
+                        & (EmotionHistory.ts >= float(start_time))
+                        & (EmotionHistory.ts <= float(end_time))
+                    )
+                    .order_by(EmotionHistory.ts.asc())
+                )
+                bot_emotions = list(global_query)
+
+            if bot_emotions:
+                latest = bot_emotions[-1]
+                if getattr(latest, "mood_state", None):
+                    data["bot_mood_state"] = latest.mood_state
+
+                def _safe_float(x):
+                    try:
+                        fx = float(x)
+                        return fx if math.isfinite(fx) else None
+                    except (TypeError, ValueError):
+                        return None
+
+                valid_v = [fv for r in bot_emotions if (fv := _safe_float(getattr(r, "v", None))) is not None]
+                valid_a = [fa for r in bot_emotions if (fa := _safe_float(getattr(r, "a", None))) is not None]
+                valid_d = [fd for r in bot_emotions if (fd := _safe_float(getattr(r, "d", None))) is not None]
+                if valid_v:
+                    data["bot_emotion_v"] = round(sum(valid_v) / len(valid_v), 4)
+                if valid_a:
+                    data["bot_emotion_a"] = round(sum(valid_a) / len(valid_a), 4)
+                if valid_d:
+                    data["bot_emotion_d"] = round(sum(valid_d) / len(valid_d), 4)
 
             # 使用db_save存储（使用start_time和chat_id作为唯一标识）
             # 由于可能有多条记录，我们使用组合键，但peewee不支持，所以使用start_time作为唯一标识

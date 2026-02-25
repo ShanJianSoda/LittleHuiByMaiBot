@@ -1,7 +1,7 @@
-import re
 import json
+import re
 import traceback
-from typing import Union
+from typing import Optional, Tuple, Union
 
 from src.common.database.database_model import Messages, Images
 from src.common.logger import get_logger
@@ -9,6 +9,25 @@ from .chat_stream import ChatStream
 from .message import MessageSending, MessageRecv
 
 logger = get_logger("message_storage")
+
+
+def _compute_message_vad(text: str) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    """对消息正文计算 VAD（事实层），供情绪模块与检索使用。无有效文本或置信度为 0 时返回 (None, None, None)。"""
+    if not (text and str(text).strip()):
+        return None, None, None
+    try:
+        from src.mood.mood_estimator import estimate_from_lexicon
+
+        v, a, d, conf = estimate_from_lexicon(str(text).strip()[:2000])
+        if conf <= 0 or not all(isinstance(x, (int, float)) for x in (v, a, d)):
+            return None, None, None
+        return (
+            round(max(-1.0, min(1.0, float(v))), 4),
+            round(max(-1.0, min(1.0, float(a))), 4),
+            round(max(-1.0, min(1.0, float(d))), 4),
+        )
+    except Exception:
+        return None, None, None
 
 
 class MessageStorage:
@@ -98,6 +117,9 @@ class MessageStorage:
             # message_id 现在是 TextField，直接使用字符串值
             msg_id = message.message_info.message_id
 
+            # 消息级 VAD（事实层）：入库时计算，供情绪更新与检索使用
+            emotion_v, emotion_a, emotion_d = _compute_message_vad(filtered_processed_plain_text or "")
+
             # 安全地获取 group_info, 如果为 None 则视为空字典
             group_info_from_chat = chat_info_dict.get("group_info") or {}
             # 安全地获取 user_info, 如果为 None 则视为空字典 (以防万一)
@@ -132,6 +154,9 @@ class MessageStorage:
                 processed_plain_text=filtered_processed_plain_text,
                 display_message=filtered_display_message,
                 interest_value=interest_value,
+                emotion_v=emotion_v,
+                emotion_a=emotion_a,
+                emotion_d=emotion_d,
                 priority_mode=priority_mode,
                 priority_info=priority_info,
                 is_emoji=is_emoji,

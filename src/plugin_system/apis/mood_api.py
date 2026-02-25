@@ -4,6 +4,8 @@
 负责提供与机器人情绪状态相关的接口，允许插件查询和控制情绪。
 
 使用方式：
+    # todo：更新所有API
+
     from src.plugin_system.apis import mood_api
 
     # 获取当前情绪

@@ -64,6 +64,9 @@ class DatabaseMessages(BaseDataModel):
         chat_id: str = "",
         reply_to: Optional[str] = None,
         interest_value: Optional[float] = None,
+        emotion_v: Optional[float] = None,
+        emotion_a: Optional[float] = None,
+        emotion_d: Optional[float] = None,
         key_words: Optional[str] = None,
         key_words_lite: Optional[str] = None,
         is_mentioned: Optional[bool] = None,
@@ -103,6 +106,9 @@ class DatabaseMessages(BaseDataModel):
         self.reply_to = reply_to
         self.interest_value = interest_value
 
+        self.emotion_v = emotion_v
+        self.emotion_a = emotion_a
+        self.emotion_d = emotion_d
         self.key_words = key_words
         self.key_words_lite = key_words_lite
         self.is_mentioned = is_mentioned
@@ -175,6 +181,9 @@ class DatabaseMessages(BaseDataModel):
             "chat_id": self.chat_id,
             "reply_to": self.reply_to,
             "interest_value": self.interest_value,
+            "emotion_v": self.emotion_v,
+            "emotion_a": self.emotion_a,
+            "emotion_d": self.emotion_d,
             "key_words": self.key_words,
             "key_words_lite": self.key_words_lite,
             "is_mentioned": self.is_mentioned,

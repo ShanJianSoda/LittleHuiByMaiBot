@@ -135,6 +135,10 @@ class Messages(BaseModel):
     reply_to = TextField(null=True)
 
     interest_value = DoubleField(null=True)
+    # 消息级 VAD（入库时由 mood_estimator 计算，供情绪更新与检索使用）
+    emotion_v = FloatField(null=True)
+    emotion_a = FloatField(null=True)
+    emotion_d = FloatField(null=True)
     key_words = TextField(null=True)
     key_words_lite = TextField(null=True)
 
@@ -371,6 +375,14 @@ class ChatHistory(BaseModel):
     key_point = TextField(null=True)  # 关键信息：话题中的关键信息点，JSON格式存储
     count = IntegerField(default=0)  # 被检索次数
     forget_times = IntegerField(default=0)  # 被遗忘检查的次数
+    emotion_v = FloatField(null=True,default=0.0)  # 话题情绪效价 [-1,1]，由概括器写入
+    emotion_a = FloatField(null=True,default=0.0)  # 话题情绪唤醒 [-1,1]，高值高唤醒率
+    emotion_d = FloatField(null=True,default=0.0)  # 话题情绪支配感 [-1,1]
+    # 话题时间窗内 bot 的情绪（来自 EmotionHistory 聚合）
+    bot_emotion_v = FloatField(null=True)
+    bot_emotion_a = FloatField(null=True)
+    bot_emotion_d = FloatField(null=True)
+    bot_mood_state = TextField(null=True)
 
     class Meta:
         table_name = "chat_history"
@@ -394,6 +406,24 @@ class ThinkingBack(BaseModel):
         table_name = "thinking_back"
 
 
+class EmotionHistory(BaseModel):
+    """
+    情绪变更历史，用于曲线、熔岩灯、chat_history 当时话题情绪等。
+    每次 mood 更新或回归时可选写入（由 mood 配置开关控制）。
+    """
+
+    chat_id = TextField(index=True)  # 聊天流 ID
+    ts = DoubleField(index=True)  # 变更时间戳
+    mood_state = TextField()  # 情绪文本描述
+    source = TextField()  # 来源："message" | "regress"
+    v = FloatField(null=True)  # valence [-1, 1]，可选
+    a = FloatField(null=True)  # arousal [-1, 1]，可选
+    d = FloatField(null=True)  # dominance [-1, 1]，可选
+
+    class Meta:
+        table_name = "emotion_history"
+
+
 MODELS = [
     ChatStreams,
     LLMUsage,
@@ -409,6 +439,7 @@ MODELS = [
     Jargon,
     ChatHistory,
     ThinkingBack,
+    EmotionHistory,
 ]
 
 
