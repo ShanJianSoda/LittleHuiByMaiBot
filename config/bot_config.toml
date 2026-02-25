@@ -1,5 +1,5 @@
 [inner]
-version = "7.4.5"
+version = "7.3.5"
 
 #----以下是给开发人员阅读的，如果你只是部署了麦麦，不需要阅读----
 # 如果你想要修改配置文件，请递增version的值
@@ -128,7 +128,6 @@ global_memory = true # 是否允许记忆检索进行全局查询
 global_memory_blacklist = [
     
 ] # 全局记忆黑名单，当启用全局记忆时，不将特定聊天流纳入检索。格式: ["platform:id:type", ...]，例如: ["qq:1919810:private", "qq:114514:group"]
-enable_emotion_weight_in_retrieval = true # 是否在 ChatHistory 检索中按情绪唤醒加权排序，高情绪话题相对靠前
 planner_question = true # 是否使用 Planner 提供的 question 作为记忆检索问题。开启后，当 Planner 在 reply 动作中提供了 question 时，直接使用该问题进行记忆检索，跳过 LLM 生成问题的步骤；关闭后沿用旧模式，使用 LLM 生成问题
 
 [dream]
@@ -154,14 +153,12 @@ dream_time_ranges = [
 ]
 # dream_time_ranges = []
 
-
 [mood]
 # 情绪系统配置
 enable_mood = true # 是否启用情绪系统
 mood_update_threshold = 1 # 情绪更新阈值，作为整体概率缩放系数，建议范围 0.1-2.0
 enable_emotion_history = true # 是否将每次情绪变更写入 emotion_history 表（曲线、熔岩灯、chat_history 情绪回溯）
 use_vad_path = true # 为 true 时情绪更新/回归走 VAD+动力学（不调 LLM），VAD 按 chat 懒加载初始为中性
-
 
 [tool]
 enable_tool = true # 是否启用工具
