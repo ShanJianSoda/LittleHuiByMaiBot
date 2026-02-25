@@ -62,7 +62,7 @@ class ChatMood:
                 from src.chat.message_receive.chat_stream import get_chat_manager
 
                 chat_manager = get_chat_manager()
-                self.chat_stream = await chat_manager.get_stream(self.chat_id)
+                self.chat_stream = chat_manager.get_stream(self.chat_id)
 
                 if not self.chat_stream:
                     # 如果找不到聊天流，使用基础日志前缀但不抛出异常
