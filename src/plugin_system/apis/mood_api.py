@@ -27,6 +27,7 @@
 import asyncio
 
 from src.common.logger import get_logger
+from src.mood.emotion_engine import get_vad_state
 from src.mood.mood_manager import mood_manager
 
 logger = get_logger("mood_api")
@@ -47,6 +48,22 @@ def get_mood(chat_id: str) -> str:
     chat_mood = mood_manager.get_mood_by_chat_id(chat_id)
     logger.debug(f"[{chat_id}] 获取情绪状态: {chat_mood.mood_state}")
     return chat_mood.mood_state
+
+
+def get_global_vad() -> tuple[float, float, float] | None:
+    """读取全 bot 统一 VAD 状态。
+
+    Returns:
+        tuple[float, float, float] | None:
+            - (v, a, d): 当前全局 VAD
+            - None: 全局动力学尚未初始化（_global_dynamics is None）
+    """
+    state = get_vad_state("global")
+    if state is None:
+        logger.debug("读取全局 VAD：未初始化（_global_dynamics is None）")
+        return None
+    logger.debug(f"读取全局 VAD：v={state[0]:.3f}, a={state[1]:.3f}, d={state[2]:.3f}")
+    return state
 
 
 def set_mood(chat_id: str, new_mood: str) -> bool:
