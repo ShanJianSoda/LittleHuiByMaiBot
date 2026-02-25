@@ -38,7 +38,10 @@ class ConfigBase:
                     # 跳过未提供且有默认值/默认构造方法的字段
                     continue
                 else:
-                    raise ValueError(f"Missing required field: '{field_name}'")
+                    raise ValueError(
+                        f"配置缺少必填段: '{field_name}'。"
+                        f"请在配置文件中添加 [{field_name}] 段，或参考模板文件获取完整配置。"
+                    )
 
             value = data[field_name]
             field_type = f.type
