@@ -781,13 +781,19 @@ class PersonInfoManager:
 person_info_manager = PersonInfoManager()
 
 
-async def store_person_memory_from_answer(person_name: str, memory_content: str, chat_id: str) -> None:
+async def store_person_memory_from_answer(
+    person_name: str,
+    memory_content: str,
+    chat_id: str,
+    category: Optional[str] = None,
+) -> None:
     """将人物信息存入person_info的memory_points
 
     Args:
         person_name: 人物名称
         memory_content: 记忆内容
         chat_id: 聊天ID
+        category: 记忆分类，如 工作/生活/偏好/情感/娱乐/学习/其他；未传或非法则用「其他」
     """
     try:
         # 从chat_id获取chat_stream
@@ -818,8 +824,12 @@ async def store_person_memory_from_answer(person_name: str, memory_content: str,
             logger.warning(f"用户 {person_name} (person_id: {person_id}) 尚未认识，无法存储记忆")
             return
 
-        # 确定记忆分类（可以根据memory_content判断，这里使用通用分类）
-        category = "其他"  # 默认分类，可以根据需要调整
+        # 记忆分类：调用方传入（如概括器 LLM 输出）；非法或未传则用「其他」
+        _allowed = ("工作", "生活", "偏好", "情感", "娱乐", "学习", "其他")
+        if not category or (str(category).strip() not in _allowed):
+            category = "其他"
+        else:
+            category = str(category).strip()
 
         # 记忆点格式：category:content:weight
         weight = "1.0"  # 默认权重

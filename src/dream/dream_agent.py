@@ -23,6 +23,7 @@ from src.dream.tools.finish_maintenance_tool import make_finish_maintenance
 from src.dream.tools.search_jargon_tool import make_search_jargon
 from src.dream.tools.delete_jargon_tool import make_delete_jargon
 from src.dream.tools.update_jargon_tool import make_update_jargon
+from src.dream.tools.store_person_relation_tool import make_store_person_relation
 
 logger = get_logger("dream_agent")
 
@@ -46,6 +47,9 @@ def init_dream_prompts() -> None:
 - update_chat_history：在不改变事实的前提下重写或精炼主题、概括、关键词、关键信息
 - delete_chat_history：删除明显冗余、噪声、错误或无意义的记录，或者非常有时效性的信息，或者无太多有用信息的日常互动。
 你也可以先用 create_chat_history 创建一条新的综合概括，再对旧的冗余记录执行多次 delete_chat_history 来完成“合并”效果。
+
+**关系记忆工具：**
+- store_person_relation：将关于某人的一条精炼记忆写入其 Person 档案（person_name、memory_content、可选 category：工作/生活/偏好/情感/娱乐/学习/其他）。在整理时若发现可沉淀的「关于某参与者的关系事实」可调用。
 
 **Jargon（黑话）维护工具（只读，禁止修改）：**
 - search_jargon：根据一个或多个关键词搜索Jargon 记录，通常是含义不明确的词条或者特殊的缩写
@@ -142,6 +146,7 @@ def init_dream_tools(chat_id: str) -> None:
     search_jargon = make_search_jargon(chat_id)
     delete_jargon = make_delete_jargon(chat_id)
     update_jargon = make_update_jargon(chat_id)
+    store_person_relation = make_store_person_relation(chat_id)
 
     _dream_tool_registry.register_tool(
         DreamTool(
@@ -240,6 +245,20 @@ def init_dream_tools(chat_id: str) -> None:
                 ),
             ],
             finish_maintenance,
+        )
+    )
+
+    # ==================== 关系记忆工具 ====================
+    _dream_tool_registry.register_tool(
+        DreamTool(
+            "store_person_relation",
+            "将关于某人的一条精炼记忆写入其 Person 档案（用于整理时沉淀关系）。可选分类：工作、生活、偏好、情感、娱乐、学习、其他。",
+            [
+                ("person_name", ToolParamType.STRING, "人物昵称（必填）。", True, None),
+                ("memory_content", ToolParamType.STRING, "记忆内容，一句话或简短描述（必填）。", True, None),
+                ("category", ToolParamType.STRING, "分类（可选）：工作、生活、偏好、情感、娱乐、学习、其他。不填则用「其他」。", False, None),
+            ],
+            store_person_relation,
         )
     )
 
