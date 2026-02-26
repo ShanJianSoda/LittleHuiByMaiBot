@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from src.common.logger import get_logger
 from .token_manager import get_token_manager
-from .auth import set_auth_cookie, clear_auth_cookie
+from .auth import set_auth_cookie, clear_auth_cookie, get_current_token
 from .rate_limiter import get_rate_limiter, check_auth_rate_limit
 from .config_routes import router as config_router
 from .statistics_routes import router as statistics_router
@@ -19,6 +19,7 @@ from .routers.system import router as system_router
 from .model_routes import router as model_router
 from .ws_auth import router as ws_auth_router
 from .annual_report_routes import router as annual_report_router
+from src.plugin_system.apis import mood_api
 
 logger = get_logger("webui.api")
 
@@ -107,10 +108,41 @@ class ResetSetupResponse(BaseModel):
     message: str = Field(..., description="结果消息")
 
 
+class GlobalVADResponse(BaseModel):
+    """全局 VAD 情绪状态响应"""
+
+    v: float = Field(..., description="Valence ∈ [-1, 1]")
+    a: float = Field(..., description="Arousal ∈ [-1, 1]")
+    d: float = Field(..., description="Dominance ∈ [-1, 1]")
+
+
 @router.get("/health")
 async def health_check():
     """健康检查"""
     return {"status": "healthy", "service": "MaiBot WebUI"}
+
+
+@router.get("/mood/vad", response_model=GlobalVADResponse)
+async def get_global_vad_endpoint(
+    request: Request,
+    _token: str = Depends(get_current_token),
+):
+    """
+    获取全局 VAD 情绪状态，用于 WebUI 熔岩灯等可视化组件。
+
+    Returns:
+        GlobalVADResponse: 当前全局 VAD（若底层尚未初始化，则返回 (0, 0, 0)）
+    """
+    try:
+        state = mood_api.get_global_vad()
+        if state is None:
+            # 未初始化时返回中性状态，避免前端出现 NaN
+            return GlobalVADResponse(v=0.0, a=0.0, d=0.0)
+        v, a, d = state
+        return GlobalVADResponse(v=v, a=a, d=d)
+    except Exception as e:
+        logger.error(f"获取全局 VAD 失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取全局 VAD 失败") from e
 
 
 @router.post("/auth/verify", response_model=TokenVerifyResponse)

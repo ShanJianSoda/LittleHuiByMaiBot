@@ -29,5 +29,618 @@
   </head>
   <body>
     <div id="root" class="notranslate"></div>
+
+    <!-- 情绪熔岩灯浮窗：右下角 · 可拖拽 · 全局可见 -->
+    <div id="lava-lamp-floating-root"></div>
+
+    <style>
+      #lava-lamp-floating-root {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 2147483000;
+        pointer-events: none;
+      }
+
+      .lava-floating-shell {
+        position: relative;
+        width: 220px;
+        height: 320px;
+        border-radius: 26px;
+        background:
+          radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 55%),
+          radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.15), transparent 55%),
+          linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(3, 7, 18, 0.98));
+        box-shadow:
+          0 24px 80px rgba(0, 0, 0, 0.85),
+          0 0 0 1px rgba(148, 163, 184, 0.3);
+        backdrop-filter: blur(24px) saturate(1.45);
+        -webkit-backdrop-filter: blur(24px) saturate(1.45);
+        overflow: hidden;
+        pointer-events: auto;
+        user-select: none;
+        cursor: grab;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+
+      .lava-floating-shell:active {
+        cursor: grabbing;
+        transform: translateY(-2px) scale(1.01);
+        box-shadow:
+          0 28px 90px rgba(0, 0, 0, 0.9),
+          0 0 0 1px rgba(191, 219, 254, 0.4);
+      }
+
+      .lava-floating-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px 4px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(209, 213, 219, 0.78);
+      }
+
+      .lava-floating-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .lava-floating-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 25% 20%, #ffffff, #22c55e);
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.85);
+      }
+
+      .lava-floating-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .lava-action-btn {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.7);
+        background: radial-gradient(circle at 30% 10%, rgba(255, 255, 255, 0.9), rgba(15, 23, 42, 0.9));
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: rgba(15, 23, 42, 0.9);
+        cursor: pointer;
+      }
+
+      .lava-floating-body {
+        position: relative;
+        padding: 4px 10px 10px;
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+        gap: 8px;
+      }
+
+      .lava-mini-container {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 7 / 12;
+        border-radius: 999px;
+        padding: 6px;
+        background:
+          radial-gradient(circle at 50% -8%, rgba(255, 255, 255, 0.6), transparent 65%),
+          linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(3, 7, 18, 0.98));
+        box-shadow:
+          0 0 0 1px rgba(148, 163, 184, 0.55),
+          0 10px 26px rgba(15, 23, 42, 0.85);
+      }
+
+      .lava-mini-highlight {
+        position: absolute;
+        top: 14%;
+        left: 11%;
+        width: 18%;
+        height: 60%;
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.47), rgba(255, 255, 255, 0));
+        opacity: 0.6;
+        mix-blend-mode: screen;
+        pointer-events: none;
+      }
+
+      #lavaCanvasFloating {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        display: block;
+      }
+
+      .lava-mini-metrics {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      }
+
+      .lava-mini-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .lava-mini-label {
+        width: 48px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(148, 163, 184, 0.9);
+      }
+
+      .lava-mini-bar-track {
+        flex: 1;
+        height: 4px;
+        border-radius: 999px;
+        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.98));
+        overflow: hidden;
+        position: relative;
+      }
+
+      .lava-mini-bar-fill {
+        position: absolute;
+        inset: 0;
+        width: 50%;
+        border-radius: inherit;
+        transform-origin: left center;
+        transform: scaleX(0.5);
+        background: linear-gradient(90deg, #3b82f6, #ec4899, #f59e0b);
+        box-shadow: 0 0 10px rgba(96, 165, 250, 0.7);
+        transition: transform 130ms ease-out;
+      }
+
+      .lava-mini-val {
+        width: 32px;
+        text-align: right;
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+        color: rgba(209, 213, 219, 0.86);
+      }
+
+      @media (max-width: 768px) {
+        .lava-floating-shell {
+          width: 190px;
+          height: 290px;
+          right: 10px;
+          bottom: 10px;
+        }
+      }
+    </style>
+
+    <script>
+      ;(function () {
+        const root = document.getElementById('lava-lamp-floating-root')
+        if (!root) return
+
+        // 创建 DOM 结构
+        root.innerHTML = `
+          <div class="lava-floating-shell" id="lavaFloatingShell">
+            <div class="lava-floating-header">
+              <div class="lava-floating-title">
+                <span class="lava-floating-dot"></span>
+                <span>情绪熔岩灯</span>
+              </div>
+              <div class="lava-floating-actions">
+                <button class="lava-action-btn" id="lavaToggleSizeBtn" title="放大/缩小">+</button>
+              </div>
+            </div>
+            <div class="lava-floating-body">
+              <div class="lava-mini-container">
+                <canvas id="lavaCanvasFloating"></canvas>
+                <div class="lava-mini-highlight"></div>
+              </div>
+              <div class="lava-mini-metrics">
+                <div class="lava-mini-row">
+                  <span class="lava-mini-label">Valence</span>
+                  <div class="lava-mini-bar-track">
+                    <div class="lava-mini-bar-fill" id="lavaValenceBar"></div>
+                  </div>
+                  <span class="lava-mini-val" id="lavaValenceVal">0.00</span>
+                </div>
+                <div class="lava-mini-row">
+                  <span class="lava-mini-label">Arousal</span>
+                  <div class="lava-mini-bar-track">
+                    <div class="lava-mini-bar-fill" id="lavaArousalBar"></div>
+                  </div>
+                  <span class="lava-mini-val" id="lavaArousalVal">0.00</span>
+                </div>
+                <div class="lava-mini-row">
+                  <span class="lava-mini-label">Domin.</span>
+                  <div class="lava-mini-bar-track">
+                    <div class="lava-mini-bar-fill" id="lavaDominanceBar"></div>
+                  </div>
+                  <span class="lava-mini-val" id="lavaDominanceVal">0.00</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+
+        const shell = document.getElementById('lavaFloatingShell')
+        const canvas = document.getElementById('lavaCanvasFloating')
+        if (!shell || !canvas) return
+
+        // 拖拽逻辑（限制在视口内）
+        ;(function setupDrag () {
+          let isDragging = false
+          let startX = 0
+          let startY = 0
+          let startLeft = 0
+          let startTop = 0
+
+          const pointerDown = e => {
+            const ev = e.touches ? e.touches[0] : e
+            isDragging = true
+            shell.style.transition = 'none'
+            startX = ev.clientX
+            startY = ev.clientY
+            const rect = shell.getBoundingClientRect()
+            startLeft = rect.left
+            startTop = rect.top
+          }
+
+          const pointerMove = e => {
+            if (!isDragging) return
+            const ev = e.touches ? e.touches[0] : e
+            const dx = ev.clientX - startX
+            const dy = ev.clientY - startY
+            const newLeft = startLeft + dx
+            const newTop = startTop + dy
+
+            const vw = window.innerWidth
+            const vh = window.innerHeight
+            const rect = shell.getBoundingClientRect()
+            const width = rect.width
+            const height = rect.height
+
+            const minLeft = 6
+            const maxLeft = vw - width - 6
+            const minTop = 6
+            const maxTop = vh - height - 6
+
+            shell.style.left = Math.min(Math.max(newLeft, minLeft), maxLeft) + 'px'
+            shell.style.top = Math.min(Math.max(newTop, minTop), maxTop) + 'px'
+            shell.style.right = 'auto'
+            shell.style.bottom = 'auto'
+            root.style.right = 'auto'
+            root.style.bottom = 'auto'
+          }
+
+          const pointerUp = () => {
+            if (!isDragging) return
+            isDragging = false
+            shell.style.transition = ''
+          }
+
+          shell.addEventListener('mousedown', pointerDown)
+          shell.addEventListener('touchstart', pointerDown, { passive: true })
+          window.addEventListener('mousemove', pointerMove)
+          window.addEventListener('touchmove', pointerMove, { passive: false })
+          window.addEventListener('mouseup', pointerUp)
+          window.addEventListener('touchend', pointerUp)
+        })()
+
+        // 放大/缩小
+        ;(function setupResize () {
+          const btn = document.getElementById('lavaToggleSizeBtn')
+          if (!btn) return
+          let large = false
+          btn.addEventListener('click', e => {
+            e.stopPropagation()
+            large = !large
+            if (large) {
+              shell.style.width = '320px'
+              shell.style.height = '420px'
+              btn.textContent = '–'
+            } else {
+              shell.style.width = ''
+              shell.style.height = ''
+              btn.textContent = '+'
+            }
+          })
+        })()
+
+        // Canvas 大小
+        const ctx = canvas.getContext('2d', { alpha: true })
+        function resizeCanvas () {
+          const rect = canvas.getBoundingClientRect()
+          const dpr = window.devicePixelRatio || 1
+          canvas.width = rect.width * dpr
+          canvas.height = rect.height * dpr
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        }
+        window.addEventListener('resize', resizeCanvas)
+        resizeCanvas()
+
+        // VAD 状态与能量池
+        let targetVAD = { v: 0, a: 0, d: 0 }
+        let smoothedVAD = { v: 0, a: 0, d: 0 }
+        let emotionEnergy = 0
+
+        const tauV = 2.0
+        const tauA = 0.6
+        const tauD = 1.2
+        const emotionDecayRate = 0.995
+
+        function clamp (v, min, max) {
+          return v < min ? min : v > max ? max : v
+        }
+        function lerp (a, b, t) {
+          return a + (b - a) * t
+        }
+
+        function hsvToRgb (h, s, v) {
+          h = ((h % 360) + 360) % 360
+          const c = v * s
+          const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+          const m = v - c
+          let r1, g1, b1
+          if (h < 60) [r1, g1, b1] = [c, x, 0]
+          else if (h < 120) [r1, g1, b1] = [x, c, 0]
+          else if (h < 180) [r1, g1, b1] = [0, c, x]
+          else if (h < 240) [r1, g1, b1] = [0, x, c]
+          else if (h < 300) [r1, g1, b1] = [x, 0, c]
+          else [r1, g1, b1] = [c, 0, x]
+          return {
+            r: Math.round((r1 + m) * 255),
+            g: Math.round((g1 + m) * 255),
+            b: Math.round((b1 + m) * 255)
+          }
+        }
+
+        function pseudoCurlNoise (x, y, t) {
+          const n1 = Math.sin(x * 1.3 + t * 0.7) * Math.cos(y * 1.7 - t * 0.9)
+          const n2 = Math.sin(x * 1.9 - t * 0.4) * Math.cos(y * 1.1 + t * 0.6)
+          return { x: n2, y: n1 }
+        }
+
+        // 调用后端接口获取 VAD
+        let lastFetchTime = 0
+        const fetchInterval = 1000 // 毫秒级；内部再做时间平滑
+
+        async function pollVAD (now) {
+          if (now - lastFetchTime < fetchInterval) return
+          lastFetchTime = now
+          try {
+            const res = await fetch('/api/webui/mood/vad', {
+              credentials: 'include'
+            })
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.v === 'number' && typeof data.a === 'number' && typeof data.d === 'number') {
+              targetVAD = {
+                v: clamp(data.v, -1, 1),
+                a: clamp(data.a, -1, 1),
+                d: clamp(data.d, -1, 1)
+              }
+            }
+          } catch (e) {
+            // 静默失败：熔岩灯只是增强视觉，不阻断主流程
+          }
+        }
+
+        function updateVAD (dt, now) {
+          pollVAD(now)
+
+          const alphaV = 1 - Math.exp(-dt / tauV)
+          const alphaA = 1 - Math.exp(-dt / tauA)
+          const alphaD = 1 - Math.exp(-dt / tauD)
+
+          const prevV = smoothedVAD.v
+          const prevA = smoothedVAD.a
+          const prevD = smoothedVAD.d
+
+          smoothedVAD.v = lerp(smoothedVAD.v, targetVAD.v, alphaV)
+          smoothedVAD.a = lerp(smoothedVAD.a, targetVAD.a, alphaA)
+          smoothedVAD.d = lerp(smoothedVAD.d, targetVAD.d, alphaD)
+
+          const delta =
+            Math.abs(targetVAD.v - prevV) +
+            Math.abs(targetVAD.a - prevA) +
+            Math.abs(targetVAD.d - prevD)
+          emotionEnergy += delta * 0.9
+          emotionEnergy *= Math.pow(emotionDecayRate, dt * 60)
+          emotionEnergy = clamp(emotionEnergy, 0, 4)
+        }
+
+        function mapVisual () {
+          const nv = (smoothedVAD.v + 1) / 2
+          const na = (smoothedVAD.a + 1) / 2
+          const nd = (smoothedVAD.d + 1) / 2
+
+          const hueBase = lerp(220, 20, nv)
+          const saturation = 0.3 + 0.7 * na
+          const value = 0.4 + 0.6 * na
+          const secondaryNoise = (Math.random() - 0.5) * 40 * (1 - nd)
+          const hueSecondary = hueBase + secondaryNoise
+
+          const blobCount = 4 + Math.floor(na * 6)
+          const blobSizeMean = lerp(0.25, 0.1, na)
+          const viscosity = lerp(0.84, 0.5, nv)
+          const buoyancy = lerp(-0.4, 0.6, nv)
+          const turbulence = 0.5 + na * 1.6 + emotionEnergy * 0.3
+          const gravityFreq = 0.12 + na * 1.3
+          const gravityAmp = 0.018 + emotionEnergy * 0.045
+
+          return {
+            nv,
+            na,
+            nd,
+            hueBase,
+            hueSecondary,
+            saturation,
+            value,
+            blobCount,
+            blobSizeMean,
+            viscosity,
+            buoyancy,
+            turbulence,
+            gravityFreq,
+            gravityAmp
+          }
+        }
+
+        class Blob {
+          constructor (x, y, r, color) {
+            this.x = x
+            this.y = y
+            this.r = r
+            this.color = color
+            this.vx = (Math.random() - 0.5) * 0.05
+            this.vy = (Math.random() - 0.5) * 0.05
+          }
+
+          update (dt, p, t) {
+            this.vy -= p.buoyancy * dt
+            const n = pseudoCurlNoise(this.x * 1.4, this.y * 1.1, t * 0.35)
+            this.vx += n.x * p.turbulence * dt * 0.7
+            this.vy += n.y * p.turbulence * dt * 0.7
+
+            this.vx *= p.viscosity
+            this.vy *= p.viscosity
+
+            this.x += this.vx * dt
+            this.y += this.vy * dt
+
+            const limit = 0.96
+            const k = 0.1
+            const ex = this.x / limit
+            const ey = this.y / limit * 1.2
+            const d2 = ex * ex + ey * ey
+            if (d2 > 1) {
+              const d = Math.sqrt(d2)
+              const over = d - 1
+              const nx = ex / d
+              const ny = ey / d
+              this.x -= nx * over * limit * k
+              this.y -= ny * over * limit * k
+              this.vx -= nx * over * 0.55
+              this.vy -= ny * over * 0.55
+            }
+          }
+        }
+
+        const blobs = []
+        function ensureBlobs (p) {
+          while (blobs.length < p.blobCount) {
+            const angle = Math.random() * Math.PI * 2
+            const r = 0.15 + Math.random() * 0.12
+            const x = Math.cos(angle) * 0.12
+            const y = (Math.random() * 1.4 - 0.7) * 0.3
+            const mix = Math.random()
+            const h = lerp(p.hueBase, p.hueSecondary, mix)
+            const rgb = hsvToRgb(h, p.saturation, p.value)
+            const color = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`
+            blobs.push(new Blob(x, y, r, color))
+          }
+          if (blobs.length > p.blobCount) blobs.length = p.blobCount
+        }
+
+        function updateBlobs (dt, p, t) {
+          ensureBlobs(p)
+          for (let i = 0; i < blobs.length; i++) {
+            const b = blobs[i]
+            const jitter = (Math.random() - 0.5) * 0.04
+            b.r = clamp(p.blobSizeMean + jitter, 0.07, 0.28)
+            b.update(dt, p, t)
+          }
+        }
+
+        const valenceBar = document.getElementById('lavaValenceBar')
+        const arousalBar = document.getElementById('lavaArousalBar')
+        const dominanceBar = document.getElementById('lavaDominanceBar')
+        const valenceVal = document.getElementById('lavaValenceVal')
+        const arousalVal = document.getElementById('lavaArousalVal')
+        const dominanceVal = document.getElementById('lavaDominanceVal')
+
+        function updateUI () {
+          const fmt = x => x.toFixed(2)
+          valenceVal && (valenceVal.textContent = fmt(smoothedVAD.v))
+          arousalVal && (arousalVal.textContent = fmt(smoothedVAD.a))
+          dominanceVal && (dominanceVal.textContent = fmt(smoothedVAD.d))
+
+          const nv = (smoothedVAD.v + 1) / 2
+          const na = (smoothedVAD.a + 1) / 2
+          const nd = (smoothedVAD.d + 1) / 2
+
+          if (valenceBar) valenceBar.style.transform = `scaleX(${0.05 + nv * 0.95})`
+          if (arousalBar) arousalBar.style.transform = `scaleX(${0.05 + na * 0.95})`
+          if (dominanceBar) dominanceBar.style.transform = `scaleX(${0.05 + nd * 0.95})`
+        }
+
+        function render (p, t) {
+          const rect = canvas.getBoundingClientRect()
+          const w = rect.width
+          const h = rect.height
+          ctx.clearRect(0, 0, w, h)
+
+          const bg = ctx.createLinearGradient(0, 0, 0, h)
+          bg.addColorStop(0, 'rgba(5,9,25,0.96)')
+          bg.addColorStop(1, 'rgba(1,4,12,0.99)')
+          ctx.fillStyle = bg
+          ctx.fillRect(0, 0, w, h)
+
+          ctx.save()
+          ctx.translate(w / 2, h / 2)
+          const tilt = Math.sin(t * p.gravityFreq) * p.gravityAmp
+          ctx.rotate(tilt)
+
+          const sx = w * 0.42
+          const sy = h * 0.4
+          ctx.globalCompositeOperation = 'lighter'
+
+          for (let i = 0; i < blobs.length; i++) {
+            const b = blobs[i]
+            const px = b.x * sx
+            const py = b.y * sy
+            const radiusPx = b.r * Math.min(sx, sy) * 1.1
+            const grad = ctx.createRadialGradient(px, py, radiusPx * 0.15, px, py, radiusPx)
+            grad.addColorStop(0, 'rgba(255,255,255,0.86)')
+            grad.addColorStop(0.24, b.color.replace(', 1)', ', 0.96)'))
+            const edgeHue = lerp(p.hueBase, p.hueSecondary, 0.55)
+            const edgeRGB = hsvToRgb(edgeHue, p.saturation * 0.78, p.value * 0.85)
+            grad.addColorStop(0.75, `rgba(${edgeRGB.r}, ${edgeRGB.g}, ${edgeRGB.b}, 0.78)`)
+            grad.addColorStop(1, 'rgba(2,6,23,0)')
+            ctx.fillStyle = grad
+            ctx.fillRect(px - radiusPx, py - radiusPx, radiusPx * 2, radiusPx * 2)
+          }
+
+          ctx.globalCompositeOperation = 'soft-light'
+          const ng = ctx.createLinearGradient(-sx, -sy, sx, sy)
+          ng.addColorStop(0, 'rgba(255,255,255,0.18)')
+          ng.addColorStop(0.5, 'rgba(148,163,184,0.04)')
+          ng.addColorStop(1, 'rgba(15,23,42,0.35)')
+          ctx.fillStyle = ng
+          ctx.fillRect(-sx, -sy, sx * 2, sy * 2)
+
+          ctx.restore()
+        }
+
+        let last = performance.now()
+        function loop (now) {
+          const dt = (now - last) / 1000
+          last = now
+          updateVAD(dt, now)
+          const params = mapVisual()
+          updateBlobs(dt, params, now / 1000)
+          render(params, now / 1000)
+          updateUI()
+          requestAnimationFrame(loop)
+        }
+        requestAnimationFrame(loop)
+      })()
+    </script>
   </body>
 </html>
