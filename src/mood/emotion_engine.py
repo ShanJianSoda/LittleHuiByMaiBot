@@ -15,7 +15,6 @@ VAD 初始化与动态过程（config.mood.use_vad_path = True 时）：
 from typing import Tuple, Optional
 
 from src.common.logger import get_logger
-from src.mood.mood_manager import mood_manager
 from src.mood.mood_estimator import estimate_from_lexicon
 from src.mood.mood_dynamics import MoodDynamics, vad_to_bucket
 from src.mood.complex_env_adapter import get_complex_env_adapter
@@ -29,6 +28,8 @@ def get_mood_for_prompt(chat_id: str, include_vad: bool = False) -> str:
     - include_vad=False：仅返回 mood_state（与现有行为一致）。
     - include_vad=True：若有全局 VAD 则追加简短 VAD 描述（所有 chat 一致）。
     """
+    from src.mood.mood_manager import mood_manager
+    
     chat_mood = mood_manager.get_mood_by_chat_id(chat_id)
     base = chat_mood.mood_state
     if not include_vad:
