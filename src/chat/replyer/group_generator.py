@@ -37,6 +37,7 @@ from src.chat.replyer.prompt.replyer_prompt import init_replyer_prompt
 from src.chat.replyer.prompt.rewrite_prompt import init_rewrite_prompt
 from src.memory_system.memory_retrieval import init_memory_retrieval_prompt, build_memory_retrieval_prompt
 from src.bw_learner.jargon_explainer import explain_jargon_in_context, retrieve_concepts_with_jargon
+from src.mood.emotion_engine import get_mood_for_prompt
 
 init_lpmm_prompt()
 init_replyer_prompt()
@@ -914,6 +915,8 @@ class DefaultReplyer:
         prompt_info: str = results_dict["prompt_info"]  # 直接使用格式化后的结果
         actions_info: str = results_dict["actions_info"]
         personality_prompt: str = results_dict["personality_prompt"]
+        mood_prompt = get_mood_for_prompt(chat_id)
+        identity_with_mood = f"{personality_prompt}\n你当前的情绪状态：{mood_prompt}"
         memory_retrieval: str = results_dict["memory_retrieval"]
         keywords_reaction_prompt = await self.build_keywords_reaction_prompt(target)
         jargon_explanation: str = results_dict.get("jargon_explanation") or ""
@@ -988,7 +991,7 @@ class DefaultReplyer:
             # relation_info_block=relation_info,
             extra_info_block=extra_info_block,
             jargon_explanation=jargon_explanation,
-            identity=personality_prompt,
+            identity=identity_with_mood,
             action_descriptions=actions_info,
             sender_name=sender,
             dialogue_prompt=dialogue_prompt,

@@ -210,6 +210,9 @@ screen -S napcat
 # 第一次运行 curl -o napcat.sh https://raw.githubusercontent.com/NapNeko/napcat-linux-installer/refs/heads/main/install.sh && bash napcat.sh
 # 运行napcat
 sudo bash ./launcher.sh
+
+# 退出
+Ctrl + D
 ```
 
 

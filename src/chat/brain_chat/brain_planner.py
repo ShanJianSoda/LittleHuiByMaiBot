@@ -25,6 +25,7 @@ from src.chat.planner_actions.action_manager import ActionManager
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.plugin_system.base.component_types import ActionInfo, ComponentType, ActionActivationType
 from src.plugin_system.core.component_registry import component_registry
+from src.mood.emotion_engine import get_mood_for_prompt
 
 if TYPE_CHECKING:
     from src.common.data_models.info_data_model import TargetPersonInfo
@@ -389,7 +390,11 @@ class BrainPlanner:
             bot_nickname = (
                 f",也可以叫你{','.join(global_config.bot.alias_names)}" if global_config.bot.alias_names else ""
             )
-            name_block = f"你的名字是{bot_name}{bot_nickname}，请注意哪些是你自己的发言。"
+            mood_text = get_mood_for_prompt(self.chat_id)
+            name_block = (
+                f"你的名字是{bot_name}{bot_nickname}，请注意哪些是你自己的发言。\n"
+                f"你当前的情绪状态：{mood_text}"
+            )
 
             # 获取主规划器模板并填充
             planner_prompt_template = await global_prompt_manager.get_prompt_async(prompt_key)

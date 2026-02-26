@@ -25,6 +25,7 @@ from src.plugin_system.base.component_types import ActionInfo, ComponentType, Ac
 from src.plugin_system.core.component_registry import component_registry
 from src.plugin_system.apis.message_api import translate_pid_to_description
 from src.person_info.person_info import Person
+from src.mood.emotion_engine import get_mood_for_prompt
 
 if TYPE_CHECKING:
     from src.common.data_models.info_data_model import TargetPersonInfo
@@ -517,7 +518,11 @@ class ActionPlanner:
             bot_nickname = (
                 f",也有人叫你{','.join(global_config.bot.alias_names)}" if global_config.bot.alias_names else ""
             )
-            name_block = f"你的名字是{bot_name}{bot_nickname}，请注意哪些是你自己的发言。"
+            mood_text = get_mood_for_prompt(self.chat_id)
+            name_block = (
+                f"你的名字是{bot_name}{bot_nickname}，请注意哪些是你自己的发言。\n"
+                f"你当前的情绪状态：{mood_text}"
+            )
 
             # 根据 think_mode 配置决定 reply action 的示例 JSON
             # 在 JSON 中直接作为 action 参数携带 unknown_words 和 question

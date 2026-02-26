@@ -9,6 +9,7 @@ from .pfc_utils import get_items_from_json
 from .observation_info import ObservationInfo
 from .conversation_info import ConversationInfo
 from src.chat.utils.chat_message_builder import build_readable_messages
+from src.mood.emotion_engine import get_mood_for_prompt
 
 
 logger = get_logger("pfc_action_planner")
@@ -107,6 +108,7 @@ class ActionPlanner:
     """行动规划器"""
 
     def __init__(self, stream_id: str, private_name: str):
+        self.stream_id = stream_id
         self.llm = LLMRequest(
             model=global_config.llm_PFC_action_planner,
             temperature=global_config.llm_PFC_action_planner["temp"],
@@ -132,7 +134,8 @@ class ActionPlanner:
             prompt_personality = random.choice(global_config.personality.states)
         
         bot_name = global_config.BOT_NICKNAME
-        return f"你的名字是{bot_name},你{prompt_personality};"
+        mood_text = get_mood_for_prompt(self.stream_id)
+        return f"你的名字是{bot_name},你{prompt_personality};你当前的情绪状态：{mood_text};"
 
     # 修改 plan 方法签名，增加 last_successful_reply_action 参数
     async def plan(
