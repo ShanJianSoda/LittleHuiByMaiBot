@@ -194,6 +194,14 @@ ban_msgs_regex = [
     # "\\d{4}-\\d{2}-\\d{2}", # 匹配日期
 ]
 
+# 通知消息跟踪配置
+enable_notice_tracking = true
+
+[message_receive.notice_dedup_windows]
+recall = 0        # 撤回消息不去重
+poke = 10         # 戳一戳 10 秒去重
+input_status = 30 # 输入状态 30 秒去重
+
 
 [lpmm_knowledge] # lpmm知识库配置
 enable = false # 是否启用lpmm知识库

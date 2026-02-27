@@ -52,9 +52,9 @@ class MessageStorage:
     async def store_message(message: Union[MessageSending, MessageRecv], chat_stream: ChatStream) -> None:
         """存储消息到数据库"""
         try:
-            # 通知消息不存储
-            if isinstance(message, MessageRecv) and message.is_notify:
-                logger.debug("通知消息，跳过存储")
+            # 通知消息默认不存储；仅当 is_notice=True 时按通知记录入库
+            if isinstance(message, MessageRecv) and message.is_notify and not getattr(message, "is_notice", False):
+                logger.debug("通知消息（未标记为持久化通知），跳过存储")
                 return
 
             pattern = r"<MainRule>.*?</MainRule>|<schedule>.*?</schedule>|<UserMessage>.*?</UserMessage>"
@@ -92,6 +92,9 @@ class MessageStorage:
                 key_words_lite = ""
                 selected_expressions = message.selected_expressions
                 intercept_message_level = 0
+                is_notice = False
+                notice_type = None
+                notice_data = None
             else:
                 filtered_display_message = ""
                 interest_value = message.interest_value
@@ -110,6 +113,10 @@ class MessageStorage:
                 key_words = MessageStorage._serialize_keywords(message.key_words)
                 key_words_lite = MessageStorage._serialize_keywords(message.key_words_lite)
                 selected_expressions = ""
+                # 通知相关字段（由上游 ChatBot 标记）
+                is_notice = getattr(message, "is_notice", False)
+                notice_type = getattr(message, "notice_type", None)
+                notice_data = getattr(message, "notice_data", None)
 
             chat_info_dict = chat_stream.to_dict()
             user_info_dict = message.message_info.user_info.to_dict()  # type: ignore
@@ -118,7 +125,14 @@ class MessageStorage:
             msg_id = message.message_info.message_id
 
             # 消息级 VAD（事实层）：入库时计算，供情绪更新与检索使用
-            emotion_v, emotion_a, emotion_d = _compute_message_vad(filtered_processed_plain_text or "")
+            # 对于通知类持久化记录（is_notice=True），不计算 VAD / 关键词 / 兴趣度
+            if isinstance(message, MessageRecv) and getattr(message, "is_notice", False):
+                emotion_v, emotion_a, emotion_d = None, None, None
+                interest_value = 0
+                key_words = ""
+                key_words_lite = ""
+            else:
+                emotion_v, emotion_a, emotion_d = _compute_message_vad(filtered_processed_plain_text or "")
 
             # 安全地获取 group_info, 如果为 None 则视为空字典
             group_info_from_chat = chat_info_dict.get("group_info") or {}
@@ -162,6 +176,9 @@ class MessageStorage:
                 is_emoji=is_emoji,
                 is_picid=is_picid,
                 is_notify=is_notify,
+                is_notice=is_notice if isinstance(message, MessageRecv) else False,
+                notice_type=notice_type if isinstance(message, MessageRecv) else None,
+                notice_data=notice_data if isinstance(message, MessageRecv) else None,
                 is_command=is_command,
                 intercept_message_level=intercept_message_level,
                 key_words=key_words,

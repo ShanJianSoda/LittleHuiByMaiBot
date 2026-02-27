@@ -175,9 +175,21 @@ class Messages(BaseModel):
     is_picid = BooleanField(default=False)
     is_command = BooleanField(default=False)
     intercept_message_level = IntegerField(default=0)
-    is_notify = BooleanField(default=False)
 
     selected_expressions = TextField(null=True)
+
+    # 通知消息统一标识与结构化数据（撤回 / 戳一戳 / 输入状态等）
+    is_notify = BooleanField(default=False)
+    """标识该记录来自通知通道（NapCat/Adapter notice 事件）"""
+
+    is_notice = BooleanField(default=False)
+    """标识该记录为需要持久化的通知消息（如撤回、戳一戳、输入状态）"""
+
+    notice_type = TextField(null=True)
+    """通知类型: recall, poke, input_status, user_join, user_leave, ..."""
+
+    notice_data = TextField(null=True)
+    """通知消息的附加数据（JSON 字符串，保持原始字段，如 sub_type/scene 等）"""
 
     class Meta:
         # database = db # 继承自 BaseModel

@@ -1,8 +1,10 @@
 import traceback
 import os
 import re
+import json
+import time
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from maim_message import UserInfo, Seg, GroupInfo
 
 from src.common.logger import get_logger
@@ -73,6 +75,8 @@ class ChatBot:
         self.bot = None  # bot 实例引用
         self._started = False
         self.heartflow_message_receiver = HeartFCMessageReceiver()  # 新增
+        # 通知消息去重缓存 {(chat_id, notice_type): last_timestamp}
+        self._notice_dedup_cache: Dict[Tuple[str, str], float] = {}
 
     async def _ensure_started(self):
         """确保所有任务已启动"""
@@ -148,62 +152,213 @@ class ChatBot:
             logger.error(f"处理命令时出错: {e}")
             return False, None, True  # 出错时继续处理消息
 
-    async def handle_notice_message(self, message: MessageRecv):
-        if message.message_info.message_id == "notice":
-            message.is_notify = True
-            logger.debug("notice消息")
-            try:
-                seg = message.message_segment
-                mi = message.message_info
-                sub_type = None
-                scene = None
-                msg_id = None
-                recalled_id = None
+    async def handle_notice_message(self, message: MessageRecv) -> bool:
+        """
+        统一处理 NapCat/Adapter 发来的 notice 消息：撤回 / 戳一戳 / 输入状态 等。
 
-                if getattr(seg, "type", None) == "notify" and isinstance(getattr(seg, "data", None), dict):
-                    sub_type = seg.data.get("sub_type")
-                    scene = seg.data.get("scene")
-                    msg_id = seg.data.get("message_id")
-                    recalled = seg.data.get("recalled_user_info") or {}
-                    if isinstance(recalled, dict):
-                        recalled_id = recalled.get("user_id")
+        - 解析通知类型与场景（sub_type / scene）
+        - 解析 chat_id（平台 + 群/私聊）
+        - 按配置进行去重
+        - 需要时写入 Messages 表（is_notice / notice_type / notice_data）
+        """
+        # 非 notice 消息直接跳过
+        if message.message_info.message_id != "notice":
+            return False
 
-                op = mi.user_info
-                gid = mi.group_info.group_id if mi.group_info else None
+        message.is_notify = True
+        logger.debug("notice消息")
 
-                # 撤回事件打印；无法获取被撤回者则省略
-                if sub_type == "recall":
-                    op_name = (
-                        getattr(op, "user_cardname", None)
-                        or getattr(op, "user_nickname", None)
-                        or str(getattr(op, "user_id", None))
-                    )
-                    recalled_name = None
-                    try:
-                        if isinstance(recalled, dict):
-                            recalled_name = (
-                                recalled.get("user_cardname")
-                                or recalled.get("user_nickname")
-                                or str(recalled.get("user_id"))
-                            )
-                    except Exception:
-                        pass
+        try:
+            seg = message.message_segment
+            mi = message.message_info
 
-                    if recalled_name and str(recalled_id) != str(getattr(op, "user_id", None)):
-                        logger.info(f"{op_name} 撤回了 {recalled_name} 的消息")
-                    else:
-                        logger.info(f"{op_name} 撤回了消息")
-                else:
-                    logger.debug(
-                        f"[notice] sub_type={sub_type} scene={scene} op={getattr(op, 'user_nickname', None)}({getattr(op, 'user_id', None)}) "
-                        f"gid={gid} msg_id={msg_id} recalled={recalled_id}"
-                    )
-            except Exception:
-                logger.info("[notice] (简略) 收到一条通知事件")
+            # 仅处理 type == notify 且 data 为 dict 的情况
+            if getattr(seg, "type", None) != "notify":
+                return True
 
+            notice_data = getattr(seg, "data", {})
+            if not isinstance(notice_data, dict):
+                return True
+
+            sub_type = notice_data.get("sub_type")
+            scene = notice_data.get("scene")
+
+            # 解析通知类型（字符串）
+            notice_type = self._parse_notice_type(sub_type, scene)
+            if not notice_type:
+                logger.debug(f"[notice] 未识别的通知类型: sub_type={sub_type}, scene={scene}")
+                return True
+
+            # 解析 chat_id
+            user_id = mi.user_info.user_id if mi.user_info else None
+            group_id = mi.group_info.group_id if mi.group_info else None
+            platform = mi.platform
+
+            if group_id:
+                chat_id = f"{platform}_group_{group_id}"
+            elif user_id:
+                chat_id = f"{platform}_private_{user_id}"
+            else:
+                logger.warning("[notice] 无法确定 chat_id")
+                return True
+
+            # 去重判断（根据配置）
+            if not self._should_record_notice(chat_id, notice_type):
+                logger.debug(f"[notice] {notice_type} 去重，跳过记录")
+                return True
+
+            # 持久化记录
+            await self._store_notice_message(
+                message=message,
+                chat_id=chat_id,
+                notice_type=notice_type,
+                notice_data=notice_data,
+            )
+
+            # 日志输出（人类可读）
+            self._log_notice_message(notice_type, notice_data, mi)
+
+        except Exception as e:
+            logger.error(f"[notice] 处理通知消息失败: {e}")
+            logger.error(traceback.format_exc())
+
+        return True
+
+    def _parse_notice_type(self, sub_type: Optional[str], scene: Optional[str]) -> Optional[str]:
+        """根据 sub_type / scene 解析统一的通知类型字符串。"""
+        if sub_type == "recall":
+            return "recall"
+        # 不同适配器可能把“戳一戳”放在 sub_type 或 scene 中
+        if sub_type == "poke" or scene == "poke":
+            return "poke"
+        # 输入状态（未来会从 input_status_process 并入这里）
+        if sub_type == "input_status" or scene == "input_status":
+            return "input_status"
+        return None
+
+    def _should_record_notice(self, chat_id: str, notice_type: str) -> bool:
+        """基于配置与去重缓存，判断是否需要记录该通知。"""
+        # 全局开关
+        if not getattr(global_config.message_receive, "enable_notice_tracking", True):
+            return False
+
+        # 获取各类型去重窗口
+        dedup_windows = getattr(global_config.message_receive, "notice_dedup_windows", {}) or {}
+        dedup_window = int(dedup_windows.get(notice_type, 30))
+
+        # 0 表示不去重
+        if dedup_window == 0:
             return True
 
-        return
+        key: Tuple[str, str] = (chat_id, notice_type)
+        now = time.time()
+
+        last_ts = self._notice_dedup_cache.get(key)
+        if last_ts is not None and now - last_ts < dedup_window:
+            return False
+
+        # 更新缓存
+        self._notice_dedup_cache[key] = now
+
+        # 简单清理过期缓存，避免无限增长
+        # 使用最大窗口的 2 倍作为保留时间
+        max_window = max(dedup_windows.values(), default=dedup_window)
+        expire_after = max_window * 2 if max_window > 0 else 60
+        to_delete = [k for k, ts in self._notice_dedup_cache.items() if now - ts > expire_after]
+        for k in to_delete:
+            self._notice_dedup_cache.pop(k, None)
+
+        return True
+
+    async def _store_notice_message(
+        self,
+        message: MessageRecv,
+        chat_id: str,
+        notice_type: str,
+        notice_data: Dict[str, Any],
+    ) -> None:
+        """将通知消息以统一结构写入 Messages 表。"""
+        try:
+            chat = get_chat_manager().get_stream(chat_id)
+            if not chat:
+                logger.warning(f"[notice] 未找到聊天流: {chat_id}")
+                return
+
+            # 构造可读文本
+            readable_text = self._format_notice_text(notice_type, notice_data, message.message_info)
+
+            # 标记消息属性，供存储层使用
+            message.is_notice = True
+            message.notice_type = notice_type
+            message.notice_data = json.dumps(notice_data, ensure_ascii=False)
+            message.processed_plain_text = readable_text
+            message.chat_stream = chat
+
+            await MessageStorage.store_message(message, chat)
+
+            logger.info(f"[notice] 持久化通知: chat_id={chat_id}, type={notice_type}")
+
+        except Exception as e:
+            logger.error(f"[notice] 存储通知消息失败: {e}")
+            logger.error(traceback.format_exc())
+
+    def _format_notice_text(self, notice_type: str, notice_data: Dict[str, Any], message_info: Any) -> str:
+        """将通知格式化为人类可读的简短文本，便于调试与统计。"""
+        user_info = getattr(message_info, "user_info", None)
+        user_name = (
+            getattr(user_info, "user_cardname", None)
+            or getattr(user_info, "user_nickname", None)
+            or str(getattr(user_info, "user_id", ""))
+            or "未知用户"
+        )
+
+        if notice_type == "recall":
+            recalled = notice_data.get("recalled_user_info") or {}
+            if isinstance(recalled, dict):
+                recalled_name = (
+                    recalled.get("user_cardname")
+                    or recalled.get("user_nickname")
+                    or str(recalled.get("user_id", ""))
+                    or "某人"
+                )
+                if str(recalled.get("user_id", "")) != str(getattr(user_info, "user_id", "")):
+                    return f"[通知] {user_name} 撤回了 {recalled_name} 的消息"
+            return f"[通知] {user_name} 撤回了消息"
+
+        if notice_type == "poke":
+            return f"[通知] {user_name} 戳了戳你"
+
+        if notice_type == "input_status":
+            return f"[通知] {user_name} 正在输入..."
+
+        return f"[通知] {notice_type}"
+
+    def _log_notice_message(self, notice_type: str, notice_data: Dict[str, Any], message_info: Any) -> None:
+        """输出稍微详细一点的通知日志，便于在日志中观察行为。"""
+        user_info = getattr(message_info, "user_info", None)
+        user_name = (
+            getattr(user_info, "user_cardname", None)
+            or getattr(user_info, "user_nickname", None)
+            or str(getattr(user_info, "user_id", ""))
+            or "未知"
+        )
+
+        if notice_type == "recall":
+            recalled = notice_data.get("recalled_user_info") or {}
+            if isinstance(recalled, dict):
+                recalled_name = (
+                    recalled.get("user_cardname")
+                    or recalled.get("user_nickname")
+                    or str(recalled.get("user_id", ""))
+                    or "某人"
+                )
+                logger.info(f"{user_name} 撤回了 {recalled_name} 的消息")
+            else:
+                logger.info(f"{user_name} 撤回了消息")
+        elif notice_type == "poke":
+            logger.info(f"{user_name} 戳了戳你")
+        else:
+            logger.debug(f"[notice] type={notice_type}, data={notice_data}")
 
     async def echo_message_process(self, raw_data: Dict[str, Any]) -> None:
         """
@@ -221,6 +376,27 @@ class ChatBot:
             logger.debug(f"更新消息ID成功: {mmc_message_id} -> {actual_message_id}")
         else:
             logger.warning(f"更新消息ID失败: {mmc_message_id} -> {actual_message_id}")
+
+    # async def input_status_process(self, raw_data: Dict[str, Any]) -> None:
+    #     """
+    #     处理输入状态通知
+    #     """
+    #     message_data: Dict[str, Any] = raw_data.get("content", {})
+    #     if not message_data:
+    #         return
+    #     message_type = message_data.get("type")
+    #     if message_type != "input_status":
+    #         return
+        
+    #     user_id = message_data.get("user_id")
+    #     group_id = message_data.get("group_id")
+    #     is_typing = message_data.get("is_typing", False)
+    #     status_text = message_data.get("status_text", "")
+        
+    #     if is_typing:
+    #         logger.info(f"[输入状态] 用户 {user_id} 正在输入..." + (f" (群: {group_id})" if group_id else ""))
+    #     else:
+    #         logger.debug(f"[输入状态] 用户 {user_id} 停止输入" + (f" (群: {group_id})" if group_id else ""))
 
     async def message_process(self, message_data: Dict[str, Any]) -> None:
         """处理转化后的统一格式消息

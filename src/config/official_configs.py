@@ -252,6 +252,19 @@ class MessageReceiveConfig(ConfigBase):
     ban_msgs_regex: set[str] = field(default_factory=lambda: set())
     """过滤正则表达式列表"""
 
+    # 通知消息跟踪（撤回 / 戳一戳 / 输入状态等）
+    enable_notice_tracking: bool = True
+    """是否启用通知消息跟踪（撤回、戳一戳、输入状态等）"""
+
+    notice_dedup_windows: dict[str, int] = field(
+        default_factory=lambda: {
+            "recall": 0,        # 撤回消息不去重
+            "poke": 10,         # 戳一戳 10 秒去重
+            "input_status": 30, # 输入状态 30 秒去重
+        }
+    )
+    """各类通知消息的去重时间窗口（秒），0 表示不去重"""
+
 
 @dataclass
 class MemoryConfig(ConfigBase):
