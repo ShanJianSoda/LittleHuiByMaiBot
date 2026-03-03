@@ -165,6 +165,29 @@ mood_update_threshold = 1 # 情绪更新阈值，作为整体概率缩放系数�
 enable_emotion_history = true # 是否将每次情绪变更写入 emotion_history 表（曲线、熔岩灯、chat_history 情绪回溯）
 use_vad_path = true # 为 true 时情绪更新/回归走 VAD+动力学（不调 LLM），VAD 按 chat 懒加载初始为中性
 
+[heartbeat]
+# 心跳系统配置
+enable = true
+fast_interval = 5 # 快速心跳周期（秒），建议默认
+normal_interval = 30 # 正常
+slow_interval = 300 # 慢速
+active_time_ranges = ["08:00-23:30"] # 启用时间段
+min_proactive_interval_seconds = 3600 # 间隔
+
+[heartbeat_v2]
+# 心跳系统 V2（默认关闭，建议灰度验证后开启）
+enable = false
+allow_legacy_parallel = false # true 时允许与旧 heartbeat 并行（谨慎开启）
+fast_interval = 5
+normal_interval = 30
+slow_interval = 300
+max_actions_per_tick = 3
+queue_max_ready = 256
+queue_max_delayed = 256
+dedup_window_seconds = 30
+history_max_items = 100
+min_reply_interval_seconds = 30
+active_time_ranges = ["08:00-23:30"]
 
 [tool]
 enable_tool = true # 是否启用工具

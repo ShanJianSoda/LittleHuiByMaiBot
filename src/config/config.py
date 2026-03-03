@@ -36,6 +36,8 @@ from src.config.official_configs import (
     DreamConfig,
     WebUIConfig,
     MoodConfig,
+    HeartbeatConfig,
+    HeartbeatV2Config,
 )
 
 from .api_ada_configs import (
@@ -358,7 +360,10 @@ class Config(ConfigBase):
     debug: DebugConfig
     voice: VoiceConfig
     dream: DreamConfig
-
+    heartbeat: HeartbeatConfig
+    """心跳系统配置"""
+    heartbeat_v2: HeartbeatV2Config = field(default_factory=HeartbeatV2Config)
+    """心跳系统V2配置"""
     mood: MoodConfig
     """情绪系统配置"""
 

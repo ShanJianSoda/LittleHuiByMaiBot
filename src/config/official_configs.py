@@ -952,3 +952,70 @@ class MoodConfig(ConfigBase):
 
     use_vad_path: bool = False
     """为 True 时，情绪更新/回归走 VAD 词典+动力学（不调 LLM）；为 False 时保持原有 LLM 生成。VAD 状态按 chat 懒加载初始化 [0,0,0]。"""
+
+
+@dataclass
+class HeartbeatConfig(ConfigBase):
+    """心跳系统配置类
+
+    为全局 HeartbeatSystem 提供启用开关与多级心跳周期配置。
+    """
+
+    enable: bool = True
+    """是否启用心跳系统"""
+
+    fast_interval: int = 10
+    """快速心跳周期（秒），用于处理紧急事件（戳一戳 / 长时间输入等），逻辑应尽量轻量"""
+
+    normal_interval: int = 60
+    """常规心跳周期（秒），用于主动思考与决策"""
+
+    slow_interval: int = 600
+    """慢速心跳周期（秒），用于全局清理与统计"""
+
+    active_time_ranges: list[str] = field(default_factory=lambda: ["08:00-23:30"])
+    """心跳系统“活跃”的时间段，格式如 'HH:MM-HH:MM'，可配置多个区间"""
+
+    min_proactive_interval_seconds: int = 3600
+    """同一 chat 最小主动发言间隔（秒），用于防止对单个用户过于频繁的主动搭话"""
+
+
+@dataclass
+class HeartbeatV2Config(ConfigBase):
+    """心跳系统V2配置类（Intent Queue + Receipt闭环）。"""
+
+    enable: bool = False
+    """是否启用心跳V2"""
+
+    allow_legacy_parallel: bool = False
+    """是否允许与旧 heartbeat 并行运行（默认关闭，避免双决策）"""
+
+    fast_interval: int = 5
+    """快速心跳周期（秒）"""
+
+    normal_interval: int = 30
+    """常规心跳周期（秒）"""
+
+    slow_interval: int = 300
+    """慢速心跳周期（秒）"""
+
+    max_actions_per_tick: int = 3
+    """单次 normal tick 的最大执行动作数"""
+
+    queue_max_ready: int = 256
+    """ready 队列上限"""
+
+    queue_max_delayed: int = 256
+    """delayed 队列上限"""
+
+    dedup_window_seconds: int = 30
+    """intent 去重时间窗口（秒）"""
+
+    history_max_items: int = 100
+    """最近心跳历史保存条数"""
+
+    min_reply_interval_seconds: int = 30
+    """同一 chat 的最小 reply 间隔（秒）"""
+
+    active_time_ranges: list[str] = field(default_factory=lambda: ["08:00-23:30"])
+    """V2 活跃时间段，格式：HH:MM-HH:MM"""
