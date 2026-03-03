@@ -26,7 +26,6 @@ from src.plugin_system.core.plugin_manager import plugin_manager
 from src.common.message import get_global_api
 from src.dream.dream_agent import start_dream_scheduler
 from src.bw_learner.expression_auto_check_task import ExpressionAutoCheckTask
-from src.chat.heartbeat.heartbeat_system import get_heartbeat_system
 from src.chat.heartbeat_v2.system import get_heartbeat_v2_system
 
 # 插件系统现在使用统一的插件加载器
@@ -69,19 +68,9 @@ class MainSystem:
         # 其他初始化任务
         await asyncio.gather(self._init_components())
 
-        # 启动心跳系统（支持 V2 与旧版并行开关）
+        # 启动心跳系统（V2 已接管 heartbeat 主配置）
         try:
-            v2_cfg = global_config.heartbeat_v2
-            legacy_cfg = global_config.heartbeat
-
-            if v2_cfg.enable:
-                await get_heartbeat_v2_system().start()
-
-            should_start_legacy = legacy_cfg.enable and (not v2_cfg.enable or v2_cfg.allow_legacy_parallel)
-            if should_start_legacy:
-                await get_heartbeat_system().start()
-            elif legacy_cfg.enable and v2_cfg.enable and not v2_cfg.allow_legacy_parallel:
-                logger.info("已启用 heartbeat_v2，旧 heartbeat 被跳过（allow_legacy_parallel=false）")
+            await get_heartbeat_v2_system().start()
         except Exception as e:  # noqa: BLE001
             logger.error(f"启动心跳系统失败: {e}")
 

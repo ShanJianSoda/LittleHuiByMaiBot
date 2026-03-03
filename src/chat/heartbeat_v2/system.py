@@ -1,10 +1,4 @@
 """
-心跳系统 V2 主入口。
-
-实现 HeartbeatV2System.start/stop，fast/normal/slow 三档循环，
-normal 中完成 collect -> generate_intents -> enqueue -> dequeue -> execute -> receipt -> history。
-"""
-"""
 心跳系统 V2 主系统。
 
 HeartbeatV2System：fast/normal/slow 三档循环，
@@ -36,7 +30,7 @@ class HeartbeatV2System:
     """心跳 V2 系统：三档循环 + 意图队列 + 执行回流闭环。"""
 
     def __init__(self) -> None:
-        cfg = global_config.heartbeat_v2
+        cfg = global_config.heartbeat
 
         self.state_fabric = StateFabric()
         self.intent_queue = IntentQueue(
@@ -59,12 +53,12 @@ class HeartbeatV2System:
     async def start(self) -> None:
         """启动 fast/normal/slow 三个心跳协程。"""
 
-        cfg = global_config.heartbeat_v2
+        cfg = global_config.heartbeat
         if self._running:
             logger.warning("HeartbeatV2System already running")
             return
         if not cfg.enable:
-            logger.info("HeartbeatV2System disabled (heartbeat_v2.enable=false)")
+            logger.info("HeartbeatV2System disabled (heartbeat.enable=false)")
             return
 
         self._running = True
@@ -93,7 +87,7 @@ class HeartbeatV2System:
     async def _fast_loop(self) -> None:
         """快速循环：轻量 requeue_delayed、drop_expired。"""
 
-        interval = max(1, int(global_config.heartbeat_v2.fast_interval))
+        interval = max(1, int(global_config.heartbeat.fast_interval))
         while self._running:
             try:
                 self.intent_queue.requeue_delayed()
@@ -105,7 +99,7 @@ class HeartbeatV2System:
     async def _normal_loop(self) -> None:
         """主规划循环：collect -> generate -> enqueue -> dequeue -> execute -> receipt -> history。"""
 
-        interval = max(1, int(global_config.heartbeat_v2.normal_interval))
+        interval = max(1, int(global_config.heartbeat.normal_interval))
         while self._running:
             started_at = time.time()
             consumed_intents: list[Intent] = []
@@ -115,7 +109,7 @@ class HeartbeatV2System:
 
                 intents = self.planner.generate_intents(self.planner.collect_inputs(state))
                 self.intent_queue.enqueue(intents)
-                take_n = max(1, int(global_config.heartbeat_v2.max_actions_per_tick))
+                take_n = max(1, int(global_config.heartbeat.max_actions_per_tick))
                 consumed_intents = self.intent_queue.dequeue(limit=take_n)
 
                 for intent in consumed_intents:
@@ -156,7 +150,7 @@ class HeartbeatV2System:
     async def _slow_loop(self) -> None:
         """慢速循环：队列与历史观测日志。"""
 
-        interval = max(10, int(global_config.heartbeat_v2.slow_interval))
+        interval = max(10, int(global_config.heartbeat.slow_interval))
         while self._running:
             try:
                 metrics = self.intent_queue.get_metrics()

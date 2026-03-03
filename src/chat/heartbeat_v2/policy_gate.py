@@ -1,12 +1,6 @@
 """
 心跳系统 V2 策略门控。
 
-在执行前检查：活跃时段、reply 冷却、chat_id 等，
-返回 (allow: bool, reason: str)。
-"""
-"""
-心跳系统 V2 策略门控。
-
 在出队执行前检查：活跃时段、reply 冷却、chat_id 等，
 allow(plan, state) -> (bool, reason)。
 """

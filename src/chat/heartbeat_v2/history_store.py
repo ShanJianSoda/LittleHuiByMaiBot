@@ -4,12 +4,6 @@
 保存最近 N 次心跳的 meta、intents、receipts，
 支持 append_tick 与 recent 查询。
 """
-"""
-心跳系统 V2 历史存储。
-
-保存最近 N 次心跳的 meta、intents、receipts，
-支持 append_tick 与 recent 查询。
-"""
 from __future__ import annotations
 
 from collections import deque

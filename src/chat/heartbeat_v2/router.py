@@ -1,12 +1,6 @@
 """
 心跳系统 V2 动作路由。
 
-根据 action_type 将 Plan 分发到对应适配器执行，
-当前支持 reply、no_op。
-"""
-"""
-心跳系统 V2 动作路由。
-
 根据 action_type 分发到对应适配器执行，
 P1 支持 reply、no_op。
 """
