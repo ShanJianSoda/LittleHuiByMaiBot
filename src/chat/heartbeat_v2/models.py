@@ -12,12 +12,14 @@ import time
 import uuid
 
 
-# 意图类型：engage/explore/retrieve/reflect/handoff/no_op/reply
-IntentType = Literal["engage", "explore", "retrieve", "reflect", "handoff", "no_op", "reply"]
+# 意图类型：engage/explore/retrieve/reflect/handoff/no_op/reply/tool_call
+IntentType = Literal["engage", "explore", "retrieve", "reflect", "handoff", "no_op", "reply", "tool_call"]
 # 动作类型：reply/search_web/find_memory/tool_call/handoff_dialogue/no_op
 ActionType = Literal["reply", "search_web", "find_memory", "tool_call", "handoff_dialogue", "no_op"]
 # 执行回执状态
 ReceiptStatus = Literal["success", "failed", "skipped", "deferred"]
+PlanNodeStatus = Literal["pending", "running", "success", "failed", "skipped", "blocked"]
+ObservationSource = Literal["text", "image", "audio", "notice", "system"]
 
 
 def _new_id(prefix: str) -> str:
@@ -108,6 +110,58 @@ class Intent:
 
 
 @dataclass
+class Observation:
+    """统一观察对象：把文本、图片、语音、通知统一映射到同一输入平面。"""
+
+    observation_id: str
+    chat_id: str
+    source: ObservationSource
+    created_at: float
+    message_id: Optional[str]
+    text: str
+    salience: float
+    emotion_hint: dict[str, Any]
+    entities: list[str]
+    intent_guess: str
+    uncertainty: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        chat_id: str,
+        source: ObservationSource,
+        text: str,
+        created_at: Optional[float] = None,
+        message_id: Optional[str] = None,
+        salience: float = 0.5,
+        emotion_hint: Optional[dict[str, Any]] = None,
+        entities: Optional[list[str]] = None,
+        intent_guess: str = "conversation",
+        uncertainty: float = 0.5,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> "Observation":
+        return cls(
+            observation_id=_new_id("obs"),
+            chat_id=chat_id,
+            source=source,
+            created_at=created_at or time.time(),
+            message_id=message_id,
+            text=text,
+            salience=max(0.0, min(1.0, salience)),
+            emotion_hint=emotion_hint or {},
+            entities=entities or [],
+            intent_guess=intent_guess,
+            uncertainty=max(0.0, min(1.0, uncertainty)),
+            metadata=metadata or {},
+        )
+
+
+@dataclass
 class Plan:
     """执行计划：由 Intent 展开得到，包含具体 action_type 与 action_args。"""
 
@@ -150,6 +204,21 @@ class PlanNode:
     action_args: dict[str, Any]
     depends_on: list[str] = field(default_factory=list)
 
+    @classmethod
+    def create(
+        cls,
+        *,
+        action_type: str,
+        action_args: Optional[dict[str, Any]] = None,
+        depends_on: Optional[list[str]] = None,
+    ) -> "PlanNode":
+        return cls(
+            node_id=_new_id("plan_node"),
+            action_type=action_type,
+            action_args=action_args or {},
+            depends_on=depends_on or [],
+        )
+
 
 @dataclass
 class PlanGraph:
@@ -158,6 +227,76 @@ class PlanGraph:
     plan_id: str
     intent_id: str
     nodes: list[PlanNode] = field(default_factory=list)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        intent_id: str,
+        nodes: Optional[list[PlanNode]] = None,
+    ) -> "PlanGraph":
+        return cls(
+            plan_id=_new_id("plan_graph"),
+            intent_id=intent_id,
+            nodes=nodes or [],
+        )
+
+
+@dataclass
+class PlanStepState:
+    """多步计划中单个节点的运行状态。"""
+
+    node_id: str
+    action_type: str
+    status: PlanNodeStatus = "pending"
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    receipt_id: Optional[str] = None
+    reason: str = ""
+    outputs: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PlanExecutionState:
+    """多步计划的共享运行态，避免仅靠 receipt 再喂回 planner。"""
+
+    execution_id: str
+    plan_id: str
+    intent_id: str
+    status: str
+    current_node_id: Optional[str]
+    step_states: list[PlanStepState] = field(default_factory=list)
+    shared_context: dict[str, Any] = field(default_factory=dict)
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        plan_id: str,
+        intent_id: str,
+        step_states: Optional[list[PlanStepState]] = None,
+        shared_context: Optional[dict[str, Any]] = None,
+    ) -> "PlanExecutionState":
+        now = time.time()
+        return cls(
+            execution_id=_new_id("plan_exec"),
+            plan_id=plan_id,
+            intent_id=intent_id,
+            status="pending",
+            current_node_id=None,
+            step_states=step_states or [],
+            shared_context=shared_context or {},
+            created_at=now,
+            updated_at=now,
+        )
 
 
 @dataclass
@@ -202,6 +341,60 @@ class ExecutionReceipt:
             cost_actual=cost_actual,
             latency_ms=latency_ms,
             timestamp=time.time(),
+        )
+
+
+@dataclass
+class ReflectionRecord:
+    """执行后的结构化反思，用于经验沉淀和离线蒸馏。"""
+
+    reflection_id: str
+    chat_id: str
+    intent_id: str
+    receipt_id: str
+    situation_key: str
+    action_type: str
+    status: ReceiptStatus
+    score: float
+    accepted: bool
+    reason: str
+    suggested_adjustment: str
+    evidence: dict[str, Any]
+    created_at: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        chat_id: str,
+        intent_id: str,
+        receipt_id: str,
+        situation_key: str,
+        action_type: str,
+        status: ReceiptStatus,
+        score: float,
+        accepted: bool,
+        reason: str,
+        suggested_adjustment: str,
+        evidence: Optional[dict[str, Any]] = None,
+    ) -> "ReflectionRecord":
+        return cls(
+            reflection_id=_new_id("reflection"),
+            chat_id=chat_id,
+            intent_id=intent_id,
+            receipt_id=receipt_id,
+            situation_key=situation_key,
+            action_type=action_type,
+            status=status,
+            score=max(-1.0, min(1.0, score)),
+            accepted=accepted,
+            reason=reason,
+            suggested_adjustment=suggested_adjustment,
+            evidence=evidence or {},
+            created_at=time.time(),
         )
 
 

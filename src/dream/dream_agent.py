@@ -12,6 +12,7 @@ from src.chat.utils.prompt_builder import Prompt, global_prompt_manager
 from src.llm_models.payload_content.message import MessageBuilder, RoleType, Message
 from src.plugin_system.apis import llm_api
 from src.dream.dream_generator import generate_dream_summary
+from src.chat.heartbeat_v2.experience_store import experience_store
 
 # dream 工具工厂函数
 from src.dream.tools.search_chat_history_tool import make_search_chat_history
@@ -83,6 +84,22 @@ def init_dream_prompts() -> None:
 """,
         name="dream_react_head_prompt",
     )
+
+
+def _distill_chat_experience(chat_id: str, limit: int = 80) -> dict[str, Any]:
+    """在 dream 阶段蒸馏该 chat 的近期反思，形成策略记忆。"""
+
+    try:
+        payload = experience_store.distill_recent_reflections(chat_id, limit=limit)
+        strategy_count = len(payload.get("strategies", []))
+        if strategy_count:
+            logger.info(f"[dream] 已为 chat_id={chat_id} 蒸馏 {strategy_count} 条策略记忆")
+        else:
+            logger.debug(f"[dream] chat_id={chat_id} 当前没有可蒸馏的反思记录")
+        return payload
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"[dream] 蒸馏 chat_id={chat_id} 的经验失败: {e}")
+        return {"chat_id": chat_id, "strategies": []}
 
 
 class DreamTool:
@@ -290,6 +307,7 @@ async def run_dream_agent_once(
 
     start_ts = time.time()
     logger.info(f"[dream] 开始对 chat_id={chat_id} 进行 dream 维护，最多迭代 {max_iterations} 轮")
+    _distill_chat_experience(chat_id)
 
     # 初始化工具（作用域限定在当前 chat_id）
     init_dream_tools(chat_id)
@@ -475,6 +493,7 @@ async def run_dream_agent_once(
 
     cost = time.time() - start_ts
     logger.info(f"[dream] 对 chat_id={chat_id} 的 dream 维护结束，共迭代 {iteration} 轮，耗时 {cost:.1f} 秒")
+    _distill_chat_experience(chat_id)
 
     # 生成梦境总结
     await generate_dream_summary(chat_id, conversation_messages, iteration, cost)

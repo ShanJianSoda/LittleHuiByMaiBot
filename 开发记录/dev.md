@@ -1,12 +1,8 @@
 # 项目
 
-项目开发的相关文档路径 `~/docs-src/`、  `~/开发记录/` 、`完整生命周期与模块示例.md`
+项目开发的相关文档路径 `~/docs-src/`、  `~/开发记录/` 、`~/docs-src/完整生命周期与模块示例.md`
 
-
-
-设计原则：AI-bot 一致性。
-
-
+设计原则：AI-bot 一致性。我希望ta更真实，又希望ta更厉害，更全能。
 
 ## 整理
 
@@ -27,6 +23,18 @@ async def process_message(self, message: MessageRecv) -> None:
         
 src/chat/replyer/replyer_manager 负责在不同场景下选用 group/private generator
 ```
+
+
+
+**记忆模块的数据应该有时间性，也就是增删改查都有时间、简略的意图附带以及元信息**
+
+心跳按一定策略进行动态更新（涉及其他模块，以及经济性的考量）
+
+多模态处理，如何同时处理视频+音频 +高响应速度
+
+接受到的消息 直接放入 还是放入队列，按照策略消费？
+
+（队列中的消息，是否需要重新设计数据结构（参考 chatbot.py：502-509）？，并修改此处的流程，投入到消息的队列）
 
 
 
@@ -193,6 +201,51 @@ topic，读的部分在memory模块
 
 
 
+```
+我建议未来真正的 LLM planner 输入最少应该是：
+
+meta
+	当前时间、bot 身份、当前 chat、active ranges
+history
+	最近几个 tick 的 intents / receipts / reflections 摘要
+observation
+	当前输入源、输入内容、salience、intent_guess、entities
+memory
+	recent events / facts / relation memories / unresolved questions
+capability
+	当前 tools / skills
+goal
+	当前主动目标候选
+policy
+	reply 冷却、风险约束、预算提示
+
+输出建议也应该是结构化的，而不是自由文本。最小版可以这样：
+{
+  "intents": [
+    {
+      "intent_type": "tool_call",
+      "target_chat_id": "xxx",
+      "payload": {
+        "query": "查一下 ciallo 是什么意思",
+        "reason": "user_question_requires_lookup"
+      },
+      "priority": 0.72,
+      "urgency": 0.45,
+      "confidence": 0.83,
+      "cost_hint": 0.30,
+      "risk_hint": 0.10,
+      "interruptiveness": 0.08
+    }
+  ],
+  "planner_reason": "..."
+}
+
+```
+
+
+
+
+
 ## PLMM模块
 
 > [!TIP]
@@ -211,6 +264,10 @@ topic，读的部分在memory模块
 
 联网搜索过滤
 
+输入源过滤（如adapter的多图、图文、视频等）
+
+输出过滤
+
 
 
 ## 更高级、智能
@@ -220,6 +277,28 @@ topic，读的部分在memory模块
 > 但这并不是一个陪伴型AI的优先项
 
 
+
+## Minecraft（多模态交互）
+
+### Voyager
+
+[纯文本 Voyager | An Open-Ended Embodied Agent with Large Language Models](https://voyager.minedojo.org/)
+
+
+
+### GROOT
+
+[视频自监督学习 GROOT: Learning to Follow Instructions by Watching Gameplay Videos](https://craftjarvis.github.io/GROOT/)
+
+
+
+### Limine
+
+[字节 Lumine: Building Generalist Agents in 3D Open Worlds](https://www.lumine-ai.org/)
+
+[Lumine: An Open Recipe for Building Generalist Agents in 3D Open Worlds · 魔搭社区](https://www.modelscope.cn/papers/2511.08892/summary)
+
+[千问3-VL-8B-Instruct · 模型库](https://www.modelscope.cn/models/Qwen/Qwen3-VL-8B-Instruct)
 
 
 
@@ -319,56 +398,4 @@ git push origin dev
 # 取消上一次提交，退回到add
 git reset --soft HEAD~1
 ```
-
-
-
-### 后续扩展方向
-
-1. **P1**: LLM 驱动的主动发言内容生成
-2. **P1**: 工具调用集成（联网搜索、记忆检索）
-3. **P2**: 更复杂的注意力得分算法（考虑关系亲密度、话题兴趣等）
-4. **P2**: 思考模式的状态机优化
-5. **P3**: WebUI 可视化展示（实时状态、聊天列表、注意力热力图）
-6. **P3**: 学习用户的作息时间，调整心跳频率
-
-
-
-### 二、心跳系统与“消息总结 / 做梦”等系统的关系
-
-#### 2.1 潜在冲突点
-
-- **资源层面**：
-  - 心跳系统：会周期性触发 LLM（主动思考、主动发言）、数据库查询（扫描多 chat 状态）。
-  - 做梦系统：会在后台大批量检索消息 / 记忆，生成“梦境”或长文本。
-  - 消息总结：会定期拉取历史消息做摘要。
-  - 如果三者各自起独立定时任务，可能出现：
-    - 某些时间段集中消耗 LLM / DB 资源，带来延迟或限流。
-
-- **行为层面**：
-  - 做梦系统和心跳系统都可能在“无新消息时主动发言”：
-    - 做梦：基于长记忆 / 夜间策略输出内容。
-    - 心跳：基于冷场 / 输入状态 / 戳一戳等观察信号主动开口。
-  - 若无协调，表现为：
-    - 同一时间片内多次“不同风格”的主动输出，降低人格一致性。
-
-#### 2.2 统一调度思路
-
-为避免冲突，建议将所有“主动行为请求”集中到一个调度中心（可由心跳系统承担）：
-
-- 各子系统（做梦、affinity 插件、总结器等）不直接“自己发消息”，而是：
-  - 向调度器提交：`request_proactive_action(source, chat_id, intent_type, meta)`
-    - `source`: `"heartbeat" | "dream" | "affinity" | "summary" | ...`
-    - `intent_type`: `"small_talk" | "care_long_typing" | "share_dream" | ...`
-    - `meta`: 附加信息（如最近行为、记忆检索结果摘要）。
-- 调度器统一考虑：
-  - 当前 chat 的冷却时间（`min_proactive_interval_seconds`）
-  - 最近是否已经有主动发言
-  - 各 `source` 的优先级 / 权重
-  - 当前全局负载（LLM 调用频率、队列长度等）
-- 决定：
-  - 执行哪个 source 的请求
-  - 何时执行（立即 / 延时）
-  - 是否合并多个 intent（例如“冷场 + 做梦”组合成一条更自然的输出）。
-
-这样，心跳系统扮演的是“主动行为总调度 + 全局节奏控制”的角色，而做梦 / 总结 / affinity 插件更多是“提供候选想法”的角色。
 

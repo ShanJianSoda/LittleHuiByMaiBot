@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+>
+> 此文档只做保存，开发相关内容参照 “心跳系统V2开发文档草案.md”
+
+
+
 ## 通知消息处理与心跳系统设计文档（工程版）
 
 **适用范围**: `src/chat/message_receive/*`, `src/common/database/*`, `src/config/*`, `src/chat/heartbeat/*`, 相关插件与上层规划器/情绪系统。  
