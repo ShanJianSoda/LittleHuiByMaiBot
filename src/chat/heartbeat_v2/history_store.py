@@ -61,6 +61,7 @@ class HistoryStore:
 
         if limit <= 0:
             return []
+        # TODO：策略获取
         items = list(self._items)[-limit:]
         return [item.to_dict() for item in items]
 
