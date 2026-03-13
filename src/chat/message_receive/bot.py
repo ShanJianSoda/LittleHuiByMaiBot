@@ -12,6 +12,7 @@ from src.config.config import global_config
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.message_receive.message import MessageRecv
 from src.chat.message_receive.storage import MessageStorage
+from src.chat.heartbeat_v2.system import get_heartbeat_v2_system
 from src.chat.heart_flow.heartflow_message_processor import HeartFCMessageReceiver
 from src.chat.utils.prompt_builder import Prompt, global_prompt_manager
 from src.plugin_system.core import component_registry, events_manager, global_announcement_manager
@@ -507,6 +508,11 @@ class ChatBot:
                     await preprocess()
             else:
                 await preprocess()
+
+            try:
+                get_heartbeat_v2_system().ingest_message(message)
+            except Exception as heartbeat_error:  # noqa: BLE001
+                logger.warning(f"heartbeat ingress 投递失败: {heartbeat_error}")
 
         except Exception as e:
             logger.error(f"预处理消息失败: {e}")

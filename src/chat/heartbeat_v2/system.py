@@ -16,8 +16,9 @@ from src.config.config import global_config
 from .executor import HeartbeatExecutor
 from .experience_store import experience_store
 from .history_store import HistoryStore
+from .ingress_queue import ObservationIngressQueue
 from .intent_queue import IntentQueue
-from .models import ExecutionReceipt, HeartbeatTickMeta, Intent
+from .models import ExecutionReceipt, HeartbeatTickMeta, Intent, Observation
 from .planner import HeartbeatPlanner
 from .policy_gate import PolicyGate
 from .reflection import ReflectionEngine
@@ -40,6 +41,11 @@ class HeartbeatV2System:
             max_delayed=cfg.queue_max_delayed,
             dedup_window_s=cfg.dedup_window_seconds,
         )
+        self.observation_ingress_queue = ObservationIngressQueue(
+            max_items=max(cfg.queue_max_ready, 128),
+            dedup_window_s=cfg.dedup_window_seconds,
+            keep_recent_s=max(180, int(cfg.normal_interval) * 6),
+        )
         self.history_store = HistoryStore(max_items=cfg.history_max_items)
         self.planner = HeartbeatPlanner()
         self.policy_gate = PolicyGate(
@@ -53,6 +59,30 @@ class HeartbeatV2System:
 
         self._running = False
         self._tasks: list[asyncio.Task] = []
+
+    def ingest_observation(self, observation: Observation) -> bool:
+        """接收预处理后的 observation，送入 heartbeat ingress queue。"""
+
+        if not observation.chat_id:
+            return False
+        accepted = self.observation_ingress_queue.enqueue(observation)
+        return accepted > 0
+
+    def ingest_message(self, message: object) -> bool:
+        """桥接旧消息链路，把处理后的消息转成 observation 投递到 heartbeat。"""
+
+        try:
+            observation = self.state_fabric.build_observation(message)
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"build ingress observation failed: {e}")
+            return False
+        accepted = self.ingest_observation(observation)
+        if accepted:
+            logger.debug(
+                f"[v2 ingress] accepted chat_id={observation.chat_id} "
+                f"message_id={observation.message_id} source={observation.source}"
+            )
+        return accepted
 
     def _summarize_memory_followup(self, receipt: ExecutionReceipt) -> str:
         memories = receipt.outputs.get("memories", [])
@@ -225,6 +255,7 @@ class HeartbeatV2System:
             try:
                 self.intent_queue.requeue_delayed()
                 self.intent_queue.drop_expired()
+                self.observation_ingress_queue.drop_expired()
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[v2 fast] loop error: {e}")
             await asyncio.sleep(interval)
@@ -240,9 +271,13 @@ class HeartbeatV2System:
             reflections: list[dict] = []
             followup_intents: list[Intent] = []
             try:
-                state = self.state_fabric.collect_all(self.history_store.recent(limit=10))
+                ingress_recent = self.observation_ingress_queue.recent(limit=30, window_seconds=180)
+                state = self.state_fabric.collect_all(
+                    self.history_store.recent(limit=10),
+                    ingress_observations=ingress_recent,
+                )
 
-                intents = self.planner.generate_intents(self.planner.collect_inputs(state))
+                intents = await self.planner.generate_intents(self.planner.collect_inputs(state))
                 self.intent_queue.enqueue(intents)
                 take_n = max(1, int(global_config.heartbeat.max_actions_per_tick))
                 consumed_intents = self.intent_queue.dequeue(limit=take_n)
@@ -291,7 +326,8 @@ class HeartbeatV2System:
                     "[v2 normal] tick done "
                     f"intents={len(consumed_intents)} receipts={len(receipts)} reflections={len(reflections)} "
                     f"followups={len(followup_intents)} "
-                    f"ready={queue_metrics['ready_length']} delayed={queue_metrics['delayed_length']}"
+                    f"ready={queue_metrics['ready_length']} delayed={queue_metrics['delayed_length']} "
+                    f"ingress_recent={len(ingress_recent)}"
                 )
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[v2 normal] loop error: {e}")
@@ -325,7 +361,10 @@ class HeartbeatV2System:
     def get_queue_metrics(self) -> dict[str, int]:
         """获取队列观测指标（长度、入队、出队、丢弃等）。"""
 
-        return self.intent_queue.get_metrics()
+        metrics = self.intent_queue.get_metrics()
+        ingress_metrics = self.observation_ingress_queue.get_metrics()
+        metrics["observation_recent_length"] = ingress_metrics.get("recent_length", 0)
+        return metrics
 
 
 _global_heartbeat_v2_system: Optional[HeartbeatV2System] = None

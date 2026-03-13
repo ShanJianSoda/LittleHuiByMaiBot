@@ -270,6 +270,12 @@ policy
 
 
 
+## napcat-adapter 
+
+chat_id 为什么不能是更简单的格式？ 1（00qq）特定长度，1、2为个人、群聊
+
+
+
 ## 更高级、智能
 
 > [!TIP]
@@ -374,6 +380,7 @@ scp -r root@112.124.67.104:~/LittleHuiByMaiBot/logs/app_20260227_143538.log.json
 
 scp -r root@112.124.67.104:~/napcat/logs/2026-02-27_08-05-50.690.log C:\Users\276912\Downloads
 
+scp -r root@112.124.67.104:~/LittleHuiByMaiBot/data/webui.json C:\Users\276912\Downloads
 
 ```
 

@@ -75,6 +75,33 @@ class ChatStreams(BaseModel):
         table_name = "chat_streams"  # 可选：明确指定数据库中的表名
 
 
+class Knock(BaseModel):
+    """
+    联系方式映射表。
+
+    用于把系统内部 chat_id 映射到更容易阅读与规划的联系方式实体。
+    用户可手动插入或维护这些数据。
+    """
+
+    chat_id = TextField(unique=True, index=True)
+    knock_id = TextField(null=True, unique=True, index=True)
+    platform = TextField()
+    knock_type = TextField()
+    user_id = TextField(null=True, index=True)
+    group_id = TextField(null=True, index=True)
+    display_name = TextField(null=True)
+    remark_name = TextField(null=True)
+    aliases = TextField(null=True)
+    source = TextField(default="manual")
+    is_enabled = BooleanField(default=True)
+    meta_json = TextField(null=True)
+    created_at = DoubleField(default=datetime.datetime.now().timestamp)
+    updated_at = DoubleField(default=datetime.datetime.now().timestamp)
+
+    class Meta:
+        table_name = "knock"
+
+
 class LLMUsage(BaseModel):
     """
     用于存储 API 使用日志数据的模型。
@@ -438,6 +465,7 @@ class EmotionHistory(BaseModel):
 
 MODELS = [
     ChatStreams,
+    Knock,
     LLMUsage,
     Emoji,
     Messages,

@@ -158,11 +158,13 @@ flowchart LR
 
 - 继续深挖 `TargetChatSelector` 的规则细节
 - 继续做 selector 与未来关系系统的真正联动
+- 继续扩展 `reply_generator_adapter` 与旧回复主链的深度桥接
 
 暂停原因不是方向错误，而是当前更需要：
 
 1. 把开发方向记录清楚
 2. 把 `Prompt + 结构化解析` 这套写法统一进后续会继续扩展的链路
+3. 先补上 planner 侧真正的“模型调用输入模板 + 结构化输出约束”，避免只把生命周期对象定义完整，但生产阶段仍然是松散规则拼装
 
 ## 已决定但还没真正展开的方向
 
@@ -170,12 +172,23 @@ flowchart LR
 
 ### A. heartbeat_v2 与旧回复主链桥接
 
-当前 `heartbeat_v2.reply` 还是直接发短文本。
+当前状态已更新：
+
+- 已经做了最小桥接：
+  - `reply_generator_adapter`
+  - `planner -> executor -> router -> adapter -> old replyer`
+- 但这条线先暂停，不继续深挖。
 
 后续价值：
 
 - 让 heartbeat_v2 真正接入更成熟的回复生成链
 - 避免主动规划层和最终回复质量脱节
+
+当前暂停原因：
+
+- 当前更关键的问题不是“reply 能不能更像原来”
+- 而是 `planner.generate_intents()` 还没有经过统一 prompt 输入与结构化输出约束
+- 如果 planner 的 intent 参数构造仍然主要靠手写规则，后面继续扩 reply 桥接，会把“生成质量”接上，但“规划质量”仍然悬空
 
 ### B. LLM planner
 
@@ -229,8 +242,71 @@ flowchart LR
 
 建议方向：
 
-- 先把主动规划中最适合结构化输出的部分改成 `Prompt + JSON 解析`
-- 例如：主动目标评估、share 理由生成、plan step 生成
+- 先从 `planner_prompt.py` 开始：
+  - 定义统一 prompt 输入模板
+  - 明确结构化 JSON 输出 schema
+  - 再决定最小接线点是 `LLM 辅助 planner` 还是 `LLM intent generator`
+- 之后再把主动规划中最适合结构化输出的部分改成 `Prompt + JSON 解析`
+- 例如：意图生成、主动目标评估、share 理由生成、plan step 生成
+
+## 本轮新增确认：Intent 生命周期与 planner prompt
+
+### 1. Intent 是否已经有“完整生命周期”
+
+当前结论：
+
+- 数据结构层面，已经接近完整：
+  - `Observation`
+  - `Intent`
+  - `Plan`
+  - `ExecutionReceipt`
+  - `ReflectionRecord`
+  - `HeartbeatHistoryItem`
+- 但从“真实生产链路”看，还不算完整。
+
+原因：
+
+- 现在 `Intent -> Plan -> Receipt` 这条对象链是完整的
+- 但 `Intent` 的“生产阶段”仍然主要由 `planner.py` 中的手写规则直接构造
+- 这意味着：
+  - 生命周期在“执行和记录”阶段是完整的
+  - 但在“生成与约束”阶段仍然缺少统一 schema、统一 prompt 输入和统一模型输出约束
+
+因此更准确的判断是：
+
+- `Intent` 目前拥有“执行生命周期”
+- 但还没有真正拥有“受约束的规划生命周期”
+
+### 2. 当前生产 intent 时，参数是如何构建的
+
+当前实现方式：
+
+1. `StateFabric.collect_all()` 汇总 `observation / memory / history / chat / capability / goal`
+2. `HeartbeatPlanner.generate_intents()` 读取这些状态
+3. 在规则分支中直接构造：
+   - `intent_type`
+   - `target_chat_id`
+   - `payload`
+   - `priority / urgency / confidence / cost_hint / risk_hint / interruptiveness`
+4. 之后 `HeartbeatExecutor.intent_to_plan()` 再把 intent 进一步映射成 plan
+5. `ActionRouter` 执行动作，生成 `ExecutionReceipt`
+
+当前问题：
+
+- 构造字段的来源是“分散在代码里的局部规则”
+- 这些字段没有经过统一输出 schema 约束
+- 很多参数虽然在对象层面存在，但语义上仍然偏手工拼装
+
+### 3. 下一阶段要先做什么
+
+本轮新的优先级调整为：
+
+1. 先做 `heartbeat_v2/planner_prompt.py`
+2. 明确定义统一 prompt 输入模板
+3. 明确结构化 JSON 输出 schema
+4. 再考虑把它接入 `planner.generate_intents()` 或抽象后的 generator 框架
+
+这样做的目的不是立刻把 planner 全量 LLM 化，而是先把“规划输入/输出协议”稳定下来。
 
 ### 3. 真正的多步 plan executor
 

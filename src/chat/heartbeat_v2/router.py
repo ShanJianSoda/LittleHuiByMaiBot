@@ -13,6 +13,7 @@ from typing import Any
 from src.common.database.database_model import ChatHistory
 from src.common.logger import get_logger
 from src.plugin_system.apis import send_api
+from .reply_generator_adapter import reply_generator_adapter
 from .skill_orchestrator import skill_orchestrator
 
 
@@ -34,8 +35,12 @@ class ActionRouter:
             if action_type == "reply":
                 chat_id = str(action_args.get("chat_id", ""))
                 text = str(action_args.get("text", "")).strip()
+                use_reply_generator = bool(action_args.get("use_reply_generator", False))
                 if not chat_id:
                     return False, "missing_chat_id", {}
+                if use_reply_generator:
+                    ok, reason, outputs = await reply_generator_adapter.generate_and_send(action_args)
+                    return ok, reason, outputs
                 if not text:
                     return False, "empty_reply_text", {}
                 ok = await send_api.text_to_stream(text=text, stream_id=chat_id, typing=False)

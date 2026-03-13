@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from src.chat.message_receive.chat_stream import get_chat_manager
+from src.common.knock import knock_manager
 from src.common.database.database_model import ChatHistory, Expression, Messages, PersonInfo, ThinkingBack
 from src.common.logger import get_logger
 from src.mood.mood_manager import mood_manager
@@ -31,6 +32,17 @@ class StateFabric:
 
     def _safe_json_loads(self, raw: Any, default: Any) -> Any:
         return parse_structured_json(raw, default)
+
+    def _read_attr(self, item: Any, name: str, default: Any = None) -> Any:
+        if isinstance(item, dict):
+            return item.get(name, default)
+        return getattr(item, name, default)
+
+    def _read_message_info_attr(self, item: Any, name: str, default: Any = None) -> Any:
+        message_info = getattr(item, "message_info", None)
+        if message_info is None:
+            return default
+        return getattr(message_info, name, default)
 
     def _classify_message_source(self, text: str, is_notice: bool) -> str:
         if is_notice:
@@ -90,29 +102,40 @@ class StateFabric:
             tone = "neutral"
         return {"v": v, "a": a, "d": d, "tone": tone}
 
-    def _build_observation(self, item: Any) -> dict[str, Any]:
+    def build_observation(self, item: Any) -> Observation:
         text = (
-            getattr(item, "processed_plain_text", None)
-            or getattr(item, "display_message", None)
-            or getattr(item, "notice_type", None)
+            self._read_attr(item, "processed_plain_text")
+            or self._read_attr(item, "display_message")
+            or self._read_attr(item, "notice_type")
             or ""
         ).strip()
-        source = self._classify_message_source(text, bool(getattr(item, "is_notice", False)))
-        notice_type = str(getattr(item, "notice_type", "") or "")
+        is_notice = bool(self._read_attr(item, "is_notice", False) or self._read_attr(item, "is_notify", False))
+        source = self._classify_message_source(text, is_notice)
+        notice_type = str(self._read_attr(item, "notice_type", "") or "")
         salience = 0.35
         if source == "notice":
             salience += 0.35
-        if getattr(item, "is_at", False) or getattr(item, "is_mentioned", False):
+        if self._read_attr(item, "is_at", False) or self._read_attr(item, "is_mentioned", False):
             salience += 0.2
         if "?" in text or "？" in text:
             salience += 0.1
-        if getattr(item, "reply_to", None):
+        if self._read_attr(item, "reply_to", None) or getattr(self._read_attr(item, "reply", None), "message_info", None):
             salience += 0.05
+        chat_id = str(
+            self._read_attr(item, "chat_id", "")
+            or getattr(self._read_attr(item, "chat_stream", None), "stream_id", "")
+            or ""
+        )
+        message_id = str(self._read_attr(item, "message_id", "") or self._read_message_info_attr(item, "message_id", "") or "")
+        created_at = float(self._read_attr(item, "time", time.time()) or self._read_message_info_attr(item, "time", time.time()) or time.time())
+        platform = str(self._read_message_info_attr(item, "platform", "") or self._read_attr(item, "platform", "") or "")
+        user_info = self._read_message_info_attr(item, "user_info", None)
+        group_info = self._read_message_info_attr(item, "group_info", None)
         observation = Observation.create(
-            chat_id=str(getattr(item, "chat_id", "") or ""),
+            chat_id=chat_id,
             source=source,  # type: ignore[arg-type]
-            created_at=float(getattr(item, "time", time.time()) or time.time()),
-            message_id=str(getattr(item, "message_id", "") or ""),
+            created_at=created_at,
+            message_id=message_id,
             text=text[:500],
             salience=salience,
             emotion_hint=self._build_emotion_hint(item),
@@ -121,12 +144,21 @@ class StateFabric:
             uncertainty=0.15 if source == "notice" else (0.25 if source in {"image", "audio"} else 0.4),
             metadata={
                 "notice_type": notice_type,
-                "is_notice": bool(getattr(item, "is_notice", False)),
-                "is_at": bool(getattr(item, "is_at", False)),
-                "is_mentioned": bool(getattr(item, "is_mentioned", False)),
+                "is_notice": is_notice,
+                "is_at": bool(self._read_attr(item, "is_at", False)),
+                "is_mentioned": bool(self._read_attr(item, "is_mentioned", False)),
+                "platform": platform,
+                "user_id": str(getattr(user_info, "user_id", "") or ""),
+                "group_id": str(getattr(group_info, "group_id", "") or ""),
+                "has_image": bool(self._read_attr(item, "is_picid", False)),
+                "has_audio": bool(self._read_attr(item, "is_voice", False)),
+                "knock": knock_manager.annotate_chat_ref(chat_id) if chat_id else {},
             },
         )
-        return observation.to_dict()
+        return observation
+
+    def _build_observation(self, item: Any) -> dict[str, Any]:
+        return self.build_observation(item).to_dict()
 
     def collect_mood_state(self) -> dict[str, Any]:
         """收集情绪状态（mood_state、emotion_v/a/d）。"""
@@ -372,11 +404,43 @@ class StateFabric:
             "now": now,
         }
 
-    def collect_observation_state(self, window_seconds: int = 180, limit: int = 30) -> dict[str, Any]:
+    def collect_observation_state(
+        self,
+        window_seconds: int = 180,
+        limit: int = 30,
+        ingress_observations: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """标准化近期文本/图片/语音/通知为 observation。"""
 
         now = time.time()
         try:
+            recent: list[dict[str, Any]] = []
+            by_chat: dict[str, list[dict[str, Any]]] = {}
+            source_counts: dict[str, int] = {}
+            seen_keys: set[str] = set()
+
+            def append_observation(observation: dict[str, Any]) -> None:
+                if not isinstance(observation, dict):
+                    return
+                message_id = str(observation.get("message_id") or "").strip()
+                observation_id = str(observation.get("observation_id") or "").strip()
+                dedup_key = message_id or observation_id
+                if dedup_key and dedup_key in seen_keys:
+                    return
+                if dedup_key:
+                    seen_keys.add(dedup_key)
+                recent.append(observation)
+                chat_id = str(observation.get("chat_id") or "").strip()
+                by_chat.setdefault(chat_id, []).append(observation)
+                source = str(observation.get("source") or "")
+                source_counts[source] = source_counts.get(source, 0) + 1
+
+            for item in ingress_observations or []:
+                created_at = float(item.get("created_at") or 0.0) if isinstance(item, dict) else 0.0
+                if created_at and (now - created_at) > window_seconds:
+                    continue
+                append_observation(item)
+
             rows = (
                 Messages.select(
                     Messages.message_id,
@@ -397,24 +461,28 @@ class StateFabric:
                 .order_by(Messages.time.desc())
                 .limit(limit)
             )
-            recent: list[dict[str, Any]] = []
-            by_chat: dict[str, list[dict[str, Any]]] = {}
-            source_counts: dict[str, int] = {}
             for item in rows:
-                observation = self._build_observation(item)
-                recent.append(observation)
-                by_chat.setdefault(observation["chat_id"], []).append(observation)
-                source = str(observation["source"])
-                source_counts[source] = source_counts.get(source, 0) + 1
+                append_observation(self._build_observation(item))
+            recent.sort(key=lambda x: float(x.get("created_at") or 0.0), reverse=True)
+            for chat_id, items in by_chat.items():
+                items.sort(key=lambda x: float(x.get("created_at") or 0.0), reverse=True)
+                by_chat[chat_id] = items[:limit]
             return {
-                "recent": recent,
+                "recent": recent[:limit],
                 "by_chat": by_chat,
                 "source_counts": source_counts,
                 "window_seconds": window_seconds,
+                "ingress_recent_count": len(list(ingress_observations or [])),
             }
         except Exception as e:  # noqa: BLE001
             logger.error(f"collect_observation_state failed: {e}")
-            return {"recent": [], "by_chat": {}, "source_counts": {}, "window_seconds": window_seconds}
+            return {
+                "recent": [],
+                "by_chat": {},
+                "source_counts": {},
+                "window_seconds": window_seconds,
+                "ingress_recent_count": 0,
+            }
 
     def collect_capability_state(self) -> dict[str, Any]:
         """收集工具、技能、MCP 三类能力快照。"""
@@ -433,7 +501,11 @@ class StateFabric:
             logger.error(f"collect_capability_state failed: {e}")
             return {"tools": [], "skills": [], "mcps": [], "tool_count": 0, "skill_count": 0, "mcp_count": 0}
 
-    def collect_all(self, recent_history: list[dict[str, Any]]) -> dict[str, Any]:
+    def collect_all(
+        self,
+        recent_history: list[dict[str, Any]],
+        ingress_observations: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """汇总所有维度状态，供 Planner 使用。"""
 
         chat_state = self.collect_chat_state()
@@ -444,7 +516,7 @@ class StateFabric:
             "notice": self.collect_notice_state(),
             "history": self.collect_history_state(recent_history),
             "chat": chat_state,
-            "observation": self.collect_observation_state(),
+            "observation": self.collect_observation_state(ingress_observations=ingress_observations),
             "capability": self.collect_capability_state(),
         }
         try:

@@ -35,6 +35,13 @@ class HeartbeatExecutor:
                 action_args={
                     "chat_id": intent.target_chat_id or intent.payload.get("chat_id", ""),
                     "text": intent.payload.get("text", ""),
+                    "reply_reason": intent.payload.get("reply_reason", ""),
+                    "observation": intent.payload.get("observation", {}),
+                    "use_reply_generator": intent.payload.get("use_reply_generator", False),
+                    "think_level": intent.payload.get("think_level", 1),
+                    "enable_tool": intent.payload.get("enable_tool", False),
+                    "extra_info": intent.payload.get("extra_info", ""),
+                    "unknown_words": intent.payload.get("unknown_words", []),
                 },
                 policy_tags=["normal"],
                 timeout_s=30,
