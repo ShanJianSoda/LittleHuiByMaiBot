@@ -70,6 +70,7 @@ force_stream_mode = false
 [models.extra_params]
 enable_thinking = true
 
+# 已停止提供
 [[models]]
 model_identifier = "Qwen/Qwen3-Next-80B-A3B-Instruct"
 name = "qwen3-next-80b"

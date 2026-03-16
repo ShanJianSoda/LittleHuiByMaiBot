@@ -163,7 +163,10 @@ class IntentQueue:
 
     def _drop_intent(self, intent: Intent, reason: str) -> None:
         self.metrics.dropped += 1
-        logger.debug(f"[queue] drop intent={intent.intent_id}, reason={reason}")
+        logger.debug(
+            f"[queue] drop intent={intent.intent_id}, type={intent.type}, "
+            f"dedup_key={intent.dedup_key}, reason={reason}"
+        )
 
     def _cleanup_dedup_index(self, now: float) -> None:
         if self.dedup_window_s <= 0:

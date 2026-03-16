@@ -298,18 +298,20 @@ def load_log_config():  # sourcery skip: use-contextlib-suppress
         "file_log_level": "DEBUG",  # 文件日志级别
         "suppress_libraries": [
             "faiss",
-            "httpx",
             "urllib3",
-            "asyncio",
-            "websockets",
-            "httpcore",
-            "requests",
             "peewee",
-            "openai",
-            "uvicorn",
             "jieba",
         ],
-        "library_log_levels": {"aiohttp": "WARNING"},
+        "library_log_levels": {
+            "aiohttp": "WARNING",
+            "asyncio": "WARNING",
+            "httpx": "WARNING",
+            "httpcore": "WARNING",
+            "websockets": "WARNING",
+            "requests": "WARNING",
+            "openai": "WARNING",
+            "uvicorn": "WARNING",
+        },
     }
 
     try:

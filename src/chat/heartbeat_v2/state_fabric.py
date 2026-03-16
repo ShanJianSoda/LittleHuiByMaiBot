@@ -16,7 +16,7 @@ from src.common.database.database_model import ChatHistory, Expression, Messages
 from src.common.logger import get_logger
 from src.mood.mood_manager import mood_manager
 
-from .active_goal_source import active_goal_source
+from .active_goal_source import active_goal_source, build_goal_signature
 from .capability_registry import capability_registry
 from .experience_store import experience_store
 from .models import Observation
@@ -366,7 +366,8 @@ class StateFabric:
         """收集最近 N 次心跳历史摘要。"""
 
         recent_receipt_actions: list[dict[str, Any]] = []
-        for tick in recent_history[-10:]:
+        resolved_goal_signatures: list[str] = []
+        for tick in recent_history[-30:]:
             receipts = tick.get("receipts", []) if isinstance(tick, dict) else []
             if not isinstance(receipts, list):
                 continue
@@ -374,20 +375,37 @@ class StateFabric:
                 if not isinstance(receipt, dict):
                     continue
                 outputs = receipt.get("outputs", {}) if isinstance(receipt.get("outputs", {}), dict) else {}
+                chat_id = outputs.get("chat_id")
+                query = outputs.get("query")
+                goal_signature = str(outputs.get("goal_signature") or "").strip()
+                if not goal_signature:
+                    goal_signature = build_goal_signature(str(chat_id or ""), str(query or ""))
+                if (
+                    receipt.get("action_type") == "search_web"
+                    and receipt.get("status") == "success"
+                    and str(receipt.get("reason") or "") == "search_completed"
+                    and str(outputs.get("search_result") or "").strip()
+                    and goal_signature
+                    and goal_signature not in resolved_goal_signatures
+                ):
+                    resolved_goal_signatures.append(goal_signature)
                 recent_receipt_actions.append(
                     {
                         "action_type": receipt.get("action_type"),
                         "status": receipt.get("status"),
-                        "chat_id": outputs.get("chat_id"),
-                        "query": outputs.get("query"),
+                        "chat_id": chat_id,
+                        "query": query,
                         "share_target_chat_id": outputs.get("share_target_chat_id"),
                         "reason": receipt.get("reason"),
+                        "timestamp": receipt.get("timestamp"),
+                        "goal_signature": goal_signature,
                     }
                 )
         return {
             "recent_tick_count": len(recent_history),
             "last_tick": recent_history[-1] if recent_history else None,
             "recent_receipt_actions": recent_receipt_actions[-20:],
+            "resolved_goal_signatures": resolved_goal_signatures[-20:],
         }
 
     def collect_chat_state(self) -> dict[str, Any]:

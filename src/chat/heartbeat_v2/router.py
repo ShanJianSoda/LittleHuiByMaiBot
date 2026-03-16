@@ -25,6 +25,12 @@ class ActionRouter:
 
     """动作路由：route(action_type, action_args) -> (ok, reason, outputs)。"""
 
+    def _summarize_action(self, action_type: str, action_args: dict[str, Any]) -> str:
+        chat_id = str(action_args.get("chat_id") or "").strip() or "-"
+        query = str(action_args.get("query") or action_args.get("text") or "").strip()
+        preview = query[:80] if query else ""
+        return f"action={action_type} chat_id={chat_id}" + (f" preview={preview}" if preview else "")
+
     async def route(self, action_type: str, action_args: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
         """执行动作，返回 (成功与否, 原因, 输出)。"""
 
@@ -32,6 +38,7 @@ class ActionRouter:
 
         started_at = time.time()
         try:
+            logger.debug(f"[router] start {self._summarize_action(action_type, action_args)}")
             if action_type == "reply":
                 chat_id = str(action_args.get("chat_id", ""))
                 text = str(action_args.get("text", "")).strip()
@@ -40,13 +47,25 @@ class ActionRouter:
                     return False, "missing_chat_id", {}
                 if use_reply_generator:
                     ok, reason, outputs = await reply_generator_adapter.generate_and_send(action_args)
+                    logger.debug(
+                        f"[router] done {self._summarize_action(action_type, action_args)} "
+                        f"ok={ok} reason={reason} elapsed_ms={int((time.time() - started_at) * 1000)}"
+                    )
                     return ok, reason, outputs
                 if not text:
                     return False, "empty_reply_text", {}
                 ok = await send_api.text_to_stream(text=text, stream_id=chat_id, typing=False)
+                logger.debug(
+                    f"[router] done {self._summarize_action(action_type, action_args)} "
+                    f"ok={ok} reason={'sent' if ok else 'send_failed'} elapsed_ms={int((time.time() - started_at) * 1000)}"
+                )
                 return ok, "sent" if ok else "send_failed", {"chat_id": chat_id, "text": text}
 
             if action_type == "no_op":
+                logger.debug(
+                    f"[router] done {self._summarize_action(action_type, action_args)} ok=True reason=noop "
+                    f"elapsed_ms={int((time.time() - started_at) * 1000)}"
+                )
                 return True, "noop", {"detail": action_args or {}}
 
             if action_type == "find_memory":
@@ -87,6 +106,11 @@ class ActionRouter:
                             "end_time": item.end_time,
                         }
                     )
+                logger.debug(
+                    f"[router] done {self._summarize_action(action_type, action_args)} ok=True "
+                    f"reason={'memory_found' if memories else 'memory_not_found'} "
+                    f"elapsed_ms={int((time.time() - started_at) * 1000)}"
+                )
                 return True, "memory_found" if memories else "memory_not_found", {
                     "chat_id": chat_id,
                     "query": query,
@@ -108,6 +132,11 @@ class ActionRouter:
                 )
                 used_tools = orchestration_result.get("used_tools", [])
                 has_skill_output = bool(orchestration_result.get("skill_results"))
+                logger.debug(
+                    f"[router] done {self._summarize_action(action_type, action_args)} ok=True "
+                    f"reason={'skill_executed' if has_skill_output else 'skill_skipped'} "
+                    f"used_tools={used_tools} elapsed_ms={int((time.time() - started_at) * 1000)}"
+                )
                 return True, "skill_executed" if has_skill_output else "skill_skipped", orchestration_result
 
             if action_type == "search_web":
@@ -137,10 +166,18 @@ class ActionRouter:
                 first_result = skill_results[0] if isinstance(skill_results, list) and skill_results else {}
                 skill_status = str(first_result.get("status") or "").strip() if isinstance(first_result, dict) else ""
                 if skill_status == "failed":
+                    logger.debug(
+                        f"[router] done {self._summarize_action(action_type, action_args)} ok=False "
+                        f"reason=search_failed elapsed_ms={int((time.time() - started_at) * 1000)}"
+                    )
                     return False, "search_failed", search_result
+                logger.debug(
+                    f"[router] done {self._summarize_action(action_type, action_args)} ok=True "
+                    f"reason=search_completed elapsed_ms={int((time.time() - started_at) * 1000)}"
+                )
                 return True, "search_completed", search_result
 
             return False, f"unsupported_action:{action_type}", {}
         except Exception as e:  # noqa: BLE001
-            logger.error(f"route failed for action={action_type}: {e}")
+            logger.error(f"route failed for {self._summarize_action(action_type, action_args)}: {e}", exc_info=True)
             return False, "exception", {"error": str(e), "elapsed_ms": int((time.time() - started_at) * 1000)}

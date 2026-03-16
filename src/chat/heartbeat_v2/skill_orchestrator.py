@@ -140,16 +140,31 @@ class WebSearchSkill(BaseSkill):
                 "used_tools": [],
             }
 
+        tool_args = {
+            "question": context.query,
+            "chat_history": context.chat_history,
+            "observation": context.observation,
+            "chat_id": context.chat_id,
+            "metadata": {
+                **(context.metadata if isinstance(context.metadata, dict) else {}),
+                "sender": context.sender,
+            },
+        }
+        logger.info(
+            f"WebSearchSkill context ready for {context.chat_id}: "
+            f"history_chars={len(context.chat_history)} observation_keys={list(context.observation.keys())[:6]}"
+        )
         try:
-            result = await tool_instance.execute({"question": context.query})
+            result = await tool_instance.execute(tool_args)
         except Exception as e:  # noqa: BLE001
-            logger.error(f"WebSearchSkill failed for {context.chat_id}: {e}")
+            logger.error(f"WebSearchSkill failed for {context.chat_id}: {e}", exc_info=True)
             return {
                 "skill_name": self.name,
                 "status": "failed",
                 "reason": str(e),
                 "content": "",
                 "used_tools": ["web_search"],
+                "context_injected": bool(context.chat_history or context.observation),
             }
 
         content = ""
@@ -162,6 +177,7 @@ class WebSearchSkill(BaseSkill):
             "content": content,
             "tool_result": result if isinstance(result, dict) else {},
             "used_tools": ["web_search"],
+            "context_injected": bool(context.chat_history or context.observation),
         }
 
 
@@ -212,6 +228,10 @@ class SkillOrchestrator:
             observation=observation or {},
             chat_history=chat_history,
             chat_stream=chat_stream,
+            metadata={
+                "chat_history_loaded": bool(chat_history.strip()),
+                "chat_history_message_count": len(history_messages) if isinstance(history_messages, list) else 0,
+            },
         )
 
     def _default_skill_plan(self, context: SkillContext) -> list[BaseSkill]:
@@ -425,6 +445,8 @@ class SkillOrchestrator:
             "skill_results": [result],
             "observation": observation if isinstance(observation, dict) else {},
             "chat_history_preview": context.chat_history[:500],
+            "context_injected": bool(result.get("context_injected")),
+            "chat_history_loaded": bool(context.chat_history.strip()),
         }
 
 

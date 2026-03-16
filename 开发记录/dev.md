@@ -57,6 +57,9 @@ src/chat/replyer/replyer_manager 负责在不同场景下选用 group/private ge
   # adapter
   2026-02-27 08:17:38 | WARNING  | src.recv_handler.notice_handler:handle_notice:108 - 不支持的notify类型: notify.input_status
   2026-02-27 08:17:38 | WARNING  | src.recv_handler.notice_handler:handle_notice:130 - notice处理失败或不支持
+  
+  # new
+  2026-03-13 14:46:27,940 - maim_message - WARNING - {'logger_name': 'maim_message', 'event': '收到未注册的自定义消息类型: input_status', 'level': 'warning', 'lineno': 78, 'module': 'maim_message', 'timestamp': '03-13 14:46:27'}
   ```
 
 - [ ] 表情包管理&识别，能否识别表情包有名称的 （因为识别的结果不好） or 优化表情包识别提示词
@@ -376,7 +379,7 @@ systemctl status bot
 ssh -L 18001:127.0.0.1:8001 root@112.124.67.104
 
 # 下载日志
-scp -r root@112.124.67.104:~/LittleHuiByMaiBot/logs/app_20260227_143538.log.jsonl C:\Users\276912\Downloads
+scp -r root@112.124.67.104:~/LittleHuiByMaiBot/logs/app_20260314_234452.log.jsonl C:\Users\276912\Downloads
 
 scp -r root@112.124.67.104:~/napcat/logs/2026-02-27_08-05-50.690.log C:\Users\276912\Downloads
 

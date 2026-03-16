@@ -6,6 +6,7 @@ intent_to_plan、execute_plan、record_receipt。
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -222,6 +223,36 @@ class HeartbeatExecutor:
 
         return execution_state, receipts
 
+    def _build_receipt_outputs(self, plan: Plan, outputs: dict[str, Any] | None = None) -> dict[str, Any]:
+        result = outputs.copy() if isinstance(outputs, dict) else {}
+        for key in (
+            "chat_id",
+            "source_chat_id",
+            "share_target_chat_id",
+            "query",
+            "text",
+            "reply_reason",
+            "explore_reason",
+            "goal_signature",
+            "selector_reason",
+            "selector_score",
+            "selector_mode",
+            "goal_candidate",
+        ):
+            if key not in result and key in plan.action_args:
+                result[key] = plan.action_args.get(key)
+        return result
+
+    def _describe_plan(self, plan: Plan) -> str:
+        chat_id = str(plan.action_args.get("chat_id") or "").strip()
+        query = str(plan.action_args.get("query") or plan.action_args.get("text") or "").strip()
+        preview = query[:80] if query else ""
+        return (
+            f"plan_id={plan.plan_id} intent_id={plan.intent_id} action={plan.action_type} "
+            f"chat_id={chat_id or '-'} timeout_s={plan.timeout_s}"
+            + (f" preview={preview}" if preview else "")
+        )
+
     async def execute_plan(self, plan: Plan, state: dict) -> ExecutionReceipt:
         """执行 Plan：先 PolicyGate 检查，再 Router 执行，最后 record_receipt。"""
         start = time.time()
@@ -231,18 +262,56 @@ class HeartbeatExecutor:
                 plan=plan,
                 status="skipped",
                 reason=reason,
-                outputs={},
+                outputs=self._build_receipt_outputs(plan),
                 latency_ms=int((time.time() - start) * 1000),
             )
 
-        ok, route_reason, outputs = await self.router.route(plan.action_type, plan.action_args)
-        return self.record_receipt(
-            plan=plan,
-            status="success" if ok else "failed",
-            reason=route_reason,
-            outputs=outputs,
-            latency_ms=int((time.time() - start) * 1000),
-        )
+        logger.debug(f"[executor] start {self._describe_plan(plan)}")
+        try:
+            ok, route_reason, outputs = await asyncio.wait_for(
+                self.router.route(plan.action_type, plan.action_args),
+                timeout=max(1, int(plan.timeout_s)),
+            )
+            return self.record_receipt(
+                plan=plan,
+                status="success" if ok else "failed",
+                reason=route_reason,
+                outputs=self._build_receipt_outputs(plan, outputs),
+                latency_ms=int((time.time() - start) * 1000),
+            )
+        except TimeoutError:
+            latency_ms = int((time.time() - start) * 1000)
+            logger.error(f"[executor] timeout {self._describe_plan(plan)} elapsed_ms={latency_ms}")
+            return self.record_receipt(
+                plan=plan,
+                status="failed",
+                reason="timeout",
+                outputs=self._build_receipt_outputs(
+                    plan,
+                    {
+                        "error": f"{plan.action_type} timed out after {plan.timeout_s}s",
+                        "timeout_s": plan.timeout_s,
+                        "elapsed_ms": latency_ms,
+                    },
+                ),
+                latency_ms=latency_ms,
+            )
+        except Exception as e:  # noqa: BLE001
+            latency_ms = int((time.time() - start) * 1000)
+            logger.error(f"[executor] exception {self._describe_plan(plan)}: {e}", exc_info=True)
+            return self.record_receipt(
+                plan=plan,
+                status="failed",
+                reason="exception",
+                outputs=self._build_receipt_outputs(
+                    plan,
+                    {
+                        "error": str(e),
+                        "elapsed_ms": latency_ms,
+                    },
+                ),
+                latency_ms=latency_ms,
+            )
 
     def record_receipt(
         self,

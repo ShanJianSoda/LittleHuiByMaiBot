@@ -14,7 +14,12 @@ from src.common.knock import knock_manager
 from src.config.config import global_config, model_config
 from src.plugin_system.apis import llm_api
 
-from .active_goal_source import ActiveGoalCandidate, active_goal_source
+from .active_goal_source import (
+    ActiveGoalCandidate,
+    active_goal_source,
+    build_goal_signature,
+    normalize_goal_query,
+)
 from .experience_store import experience_store
 from .models import Intent
 from .planner_prompt import parse_planner_output, render_planner_prompt
@@ -52,11 +57,14 @@ class HeartbeatPlanner:
         *,
         chat_id: str,
         action_type: str,
+        within_seconds: int | None = None,
+        goal_signature: str = "",
     ) -> bool:
         history_state = state.get("history", {})
         recent_actions = history_state.get("recent_receipt_actions", [])
         if not isinstance(recent_actions, list):
             return False
+        now = time.time()
         for item in reversed(recent_actions):
             if not isinstance(item, dict):
                 continue
@@ -66,6 +74,16 @@ class HeartbeatPlanner:
                 continue
             if str(item.get("status") or "") != "success":
                 continue
+            item_goal_signature = str(item.get("goal_signature") or "").strip()
+            if goal_signature and item_goal_signature and item_goal_signature != goal_signature:
+                continue
+            if within_seconds is not None:
+                try:
+                    timestamp = float(item.get("timestamp") or 0.0)
+                except (TypeError, ValueError):
+                    timestamp = 0.0
+                if timestamp and (now - timestamp) > max(0, within_seconds):
+                    continue
             return True
         return False
 
@@ -95,8 +113,20 @@ class HeartbeatPlanner:
             return []
         return strategies[:3]
 
-    def _is_search_cooldown(self, state: dict[str, Any], chat_id: str) -> bool:
-        return self._has_recent_action(state, chat_id=chat_id, action_type="search_web")
+    def _is_search_cooldown(self, state: dict[str, Any], chat_id: str, query: str = "") -> bool:
+        cooldown_seconds = int(getattr(global_config.heartbeat, "search_cooldown_seconds", 1800) or 1800)
+        goal_signature = build_goal_signature(chat_id, query)
+        history_state = state.get("history", {})
+        resolved_goal_signatures = history_state.get("resolved_goal_signatures", [])
+        if goal_signature and isinstance(resolved_goal_signatures, list) and goal_signature in resolved_goal_signatures:
+            return True
+        return self._has_recent_action(
+            state,
+            chat_id=chat_id,
+            action_type="search_web",
+            within_seconds=cooldown_seconds,
+            goal_signature=goal_signature,
+        )
 
     def _strategy_confidence_boost(self, strategy_hints: list[dict[str, Any]]) -> float:
         if not strategy_hints:
@@ -145,10 +175,15 @@ class HeartbeatPlanner:
         last_message_text = str(chat.get("last_message_text") or "").strip()
         if not last_message_text:
             return ""
+        normalized = normalize_goal_query(last_message_text)
+        if not normalized:
+            return ""
         explore_tokens = ("最近", "新闻", "更新", "变化", "发布", "消息", "情况", "新版本", "动态")
         if any(token in last_message_text for token in explore_tokens):
             return last_message_text[:120]
-        return f"{last_message_text[:80]} 最新进展"
+        if any(token in last_message_text for token in ("什么", "怎么", "为什么", "吗", "呢", "？", "?")):
+            return last_message_text[:120]
+        return f"{last_message_text[:80]} 最近情况"
 
     def _pick_message_explore_chat(self, state: dict[str, Any]) -> dict[str, Any] | None:
         chat_state = state.get("chat", {})
@@ -176,7 +211,10 @@ class HeartbeatPlanner:
                 continue
             if len(last_message_text) < 6:
                 continue
-            if self._is_search_cooldown(state, chat_id):
+            query = self._build_explore_query(item)
+            if not query:
+                continue
+            if self._is_search_cooldown(state, chat_id, query):
                 continue
             return item
         return None
@@ -532,12 +570,14 @@ class HeartbeatPlanner:
         explore_reason = ""
         goal_payload: dict[str, Any] = {}
         pseudo_observation: dict[str, Any] | None = None
+        goal_signature = ""
 
-        if active_goal and not self._is_search_cooldown(state, active_goal.chat_id):
+        if active_goal and not self._is_search_cooldown(state, active_goal.chat_id, active_goal.query):
             source_chat_id = active_goal.chat_id
             query = active_goal.query
             explore_reason = active_goal.reason
             goal_payload = active_goal.to_dict()
+            goal_signature = build_goal_signature(source_chat_id, query)
             pseudo_observation = {
                 "chat_id": source_chat_id,
                 "source": "system",
@@ -548,6 +588,7 @@ class HeartbeatPlanner:
                     "trigger": active_goal.source,
                     "goal_type": active_goal.goal_type,
                     "goal_reason": active_goal.reason,
+                    "goal_signature": goal_signature,
                 },
             }
         else:
@@ -557,6 +598,7 @@ class HeartbeatPlanner:
                 query = self._build_explore_query(explore_chat)
                 if source_chat_id and query:
                     explore_reason = "heartbeat_active_thinking"
+                    goal_signature = build_goal_signature(source_chat_id, query)
                     pseudo_observation = {
                         "chat_id": source_chat_id,
                         "source": "system",
@@ -566,6 +608,7 @@ class HeartbeatPlanner:
                         "metadata": {
                             "trigger": "heartbeat_active_thinking",
                             "silent_for_s": int(explore_chat.get("silent_for_s") or 0),
+                            "goal_signature": goal_signature,
                         },
                     }
 
@@ -593,6 +636,7 @@ class HeartbeatPlanner:
                         "observation": pseudo_observation,
                         "explore_reason": explore_reason,
                         "goal_candidate": goal_payload,
+                        "goal_signature": goal_signature,
                         "share_target_chat_id": selection.share_target_chat_id,
                         "selector_reason": selection.selector_reason,
                         "selector_score": selection.selector_score,
@@ -602,7 +646,7 @@ class HeartbeatPlanner:
                             str(item.get("strategy_key") or "") for item in strategy_hints
                         ],
                     },
-                    dedup_key=f"explore-{source_chat_id}-{query[:48]}",
+                    dedup_key=f"explore-{goal_signature or build_goal_signature(source_chat_id, query)}",
                     expire_after_s=300,
                     lane="maintenance",
                     priority=0.46 if not goal_payload else 0.58,

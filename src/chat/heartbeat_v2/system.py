@@ -60,6 +60,34 @@ class HeartbeatV2System:
         self._running = False
         self._tasks: list[asyncio.Task] = []
 
+    def _log_task_done(self, task: asyncio.Task) -> None:
+        task_name = task.get_name()
+        if task.cancelled():
+            logger.info(f"[v2 task] cancelled name={task_name}")
+            return
+        try:
+            exception = task.exception()
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"[v2 task] inspect failed name={task_name}: {e}", exc_info=True)
+            return
+        if exception is not None:
+            logger.error(
+                f"[v2 task] crashed name={task_name}: {exception}",
+                exc_info=(type(exception), exception, exception.__traceback__),
+            )
+            return
+        logger.warning(f"[v2 task] exited unexpectedly name={task_name}")
+
+    def _summarize_intent(self, intent: Intent) -> str:
+        payload = intent.payload if isinstance(intent.payload, dict) else {}
+        chat_id = str(intent.target_chat_id or payload.get("chat_id") or "").strip() or "-"
+        query = str(payload.get("query") or payload.get("text") or "").strip()
+        preview = query[:80] if query else ""
+        return (
+            f"intent_id={intent.intent_id} type={intent.type} chat_id={chat_id}"
+            + (f" preview={preview}" if preview else "")
+        )
+
     def ingest_observation(self, observation: Observation) -> bool:
         """接收预处理后的 observation，送入 heartbeat ingress queue。"""
 
@@ -185,6 +213,10 @@ class HeartbeatV2System:
         if not text.strip():
             return []
 
+        expire_after_s = 120
+        if receipt.action_type == "search_web":
+            expire_after_s = int(getattr(global_config.heartbeat, "search_followup_expire_seconds", 600) or 600)
+
         return [
             Intent.create(
                 source="receipt",
@@ -199,9 +231,10 @@ class HeartbeatV2System:
                     "share_target_chat_id": str(receipt.outputs.get("share_target_chat_id") or chat_id),
                     "selector_reason": str(receipt.outputs.get("selector_reason") or ""),
                     "selector_score": float(receipt.outputs.get("selector_score", 0.0) or 0.0),
+                    "goal_signature": str(receipt.outputs.get("goal_signature") or ""),
                 },
                 dedup_key=f"followup-{receipt.receipt_id}",
-                expire_after_s=120,
+                expire_after_s=expire_after_s,
                 delayed_for_s=2,
                 lane="normal",
                 priority=0.62,
@@ -234,6 +267,8 @@ class HeartbeatV2System:
             loop.create_task(self._normal_loop(), name="heartbeat_v2_normal"),
             loop.create_task(self._slow_loop(), name="heartbeat_v2_slow"),
         ]
+        for task in self._tasks:
+            task.add_done_callback(self._log_task_done)
 
     async def stop(self) -> None:
         """停止所有心跳协程。"""
@@ -271,9 +306,10 @@ class HeartbeatV2System:
             reflections: list[dict] = []
             followup_intents: list[Intent] = []
             try:
+                logger.debug("[v2 normal] tick start")
                 ingress_recent = self.observation_ingress_queue.recent(limit=30, window_seconds=180)
                 state = self.state_fabric.collect_all(
-                    self.history_store.recent(limit=10),
+                    self.history_store.recent(limit=40),
                     ingress_observations=ingress_recent,
                 )
 
@@ -284,9 +320,10 @@ class HeartbeatV2System:
 
                 for intent in consumed_intents:
                     try:
+                        logger.info(f"[v2 normal] execute start {self._summarize_intent(intent)}")
                         receipt = await self.executor.execute(intent, state)
                     except Exception as e:  # noqa: BLE001
-                        logger.error(f"execute intent failed: {e}")
+                        logger.error(f"execute intent failed {self._summarize_intent(intent)}: {e}", exc_info=True)
                         receipt = ExecutionReceipt.create(
                             plan_id="plan_unknown",
                             intent_id=intent.intent_id,
@@ -296,6 +333,11 @@ class HeartbeatV2System:
                             outputs={},
                             latency_ms=0,
                         )
+                    logger.info(
+                        f"[v2 normal] execute done {self._summarize_intent(intent)} "
+                        f"status={receipt.status} action={receipt.action_type} reason={receipt.reason} "
+                        f"latency_ms={receipt.latency_ms}"
+                    )
                     receipts.append(receipt)
                     try:
                         reflection = self.reflection_engine.reflect(intent=intent, receipt=receipt, state=state)
@@ -303,11 +345,11 @@ class HeartbeatV2System:
                         reflections.append(reflection_dict)
                         self.experience_store.append_reflection(reflection_dict)
                     except Exception as reflection_error:  # noqa: BLE001
-                        logger.error(f"reflect receipt failed: {reflection_error}")
+                        logger.error(f"reflect receipt failed: {reflection_error}", exc_info=True)
                     try:
                         followup_intents.extend(self._build_followup_intents(receipt))
                     except Exception as followup_error:  # noqa: BLE001
-                        logger.error(f"build followup intents failed: {followup_error}")
+                        logger.error(f"build followup intents failed: {followup_error}", exc_info=True)
 
                 if followup_intents:
                     self.intent_queue.enqueue(followup_intents)
@@ -327,10 +369,10 @@ class HeartbeatV2System:
                     f"intents={len(consumed_intents)} receipts={len(receipts)} reflections={len(reflections)} "
                     f"followups={len(followup_intents)} "
                     f"ready={queue_metrics['ready_length']} delayed={queue_metrics['delayed_length']} "
-                    f"ingress_recent={len(ingress_recent)}"
+                    f"ingress_recent={len(ingress_recent)} elapsed_ms={int((time.time() - started_at) * 1000)}"
                 )
             except Exception as e:  # noqa: BLE001
-                logger.error(f"[v2 normal] loop error: {e}")
+                logger.error(f"[v2 normal] loop error: {e}", exc_info=True)
             await asyncio.sleep(interval)
 
     async def _slow_loop(self) -> None:

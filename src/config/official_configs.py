@@ -979,8 +979,14 @@ class HeartbeatConfig(ConfigBase):
     queue_max_delayed: int = 256
     """delayed 队列上限"""
 
-    dedup_window_seconds: int = 30
+    dedup_window_seconds: int = 180
     """intent 去重时间窗口（秒）"""
+
+    search_cooldown_seconds: int = 1800
+    """同一 chat 的主动搜索冷却时间（秒）"""
+
+    search_followup_expire_seconds: int = 600
+    """搜索 followup reply 的过期时间（秒）"""
 
     history_max_items: int = 100
     """最近心跳历史保存条数"""

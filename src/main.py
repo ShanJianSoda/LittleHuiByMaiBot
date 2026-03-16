@@ -149,21 +149,51 @@ class MainSystem:
 
     async def schedule_tasks(self):
         """调度定时任务"""
-        try:
-            tasks = [
-                get_emoji_manager().start_periodic_check_register(),
-                start_dream_scheduler(),
-                self.app.run(),
-                self.server.run(),
-            ]
+        task_factories = [
+            ("emoji_periodic_check", get_emoji_manager().start_periodic_check_register()),
+            ("dream_scheduler", start_dream_scheduler()),
+            ("message_app", self.app.run()),
+            ("message_server", self.server.run()),
+        ]
+        if self.webui_server:
+            task_factories.append(("webui_server", self.webui_server.start()))
 
-            # 如果 WebUI 服务器已初始化，添加到任务列表
-            if self.webui_server:
-                tasks.append(self.webui_server.start())
+        tasks = [asyncio.create_task(coro, name=name) for name, coro in task_factories]
+        try:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+            failure: Exception | None = None
+            for task in done:
+                task_name = task.get_name()
+                if task.cancelled():
+                    logger.warning(f"调度子任务被取消: {task_name}")
+                    continue
+                exception = task.exception()
+                if exception is not None:
+                    logger.error(
+                        f"调度子任务异常退出: {task_name}: {exception}",
+                        exc_info=(type(exception), exception, exception.__traceback__),
+                    )
+                    failure = exception
+                    continue
+                logger.warning(f"调度子任务提前结束: {task_name}")
+                if failure is None:
+                    failure = RuntimeError(f"任务 {task_name} 提前结束")
+
+            if pending:
+                logger.warning(f"检测到调度子任务退出，准备停止其余 {len(pending)} 个任务")
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+
+            if failure is not None:
+                raise failure
 
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             logger.info("调度任务已取消")
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
     # async def forget_memory_task(self):

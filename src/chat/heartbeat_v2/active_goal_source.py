@@ -6,7 +6,26 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import re
 from typing import Any
+
+
+def normalize_goal_query(text: str) -> str:
+    raw = str(text or "").strip().lower()
+    if not raw:
+        return ""
+    normalized = re.sub(r"\s+", " ", raw)
+    normalized = re.sub(r"[^\w\u4e00-\u9fff]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized[:120]
+
+
+def build_goal_signature(chat_id: str, query: str) -> str:
+    normalized_query = normalize_goal_query(query)
+    normalized_chat_id = str(chat_id or "").strip()
+    if not normalized_chat_id or not normalized_query:
+        return ""
+    return f"{normalized_chat_id}::{normalized_query}"
 
 
 @dataclass
@@ -30,6 +49,7 @@ class ActiveGoalSource:
     def _append_candidate(self, items: list[ActiveGoalCandidate], candidate: ActiveGoalCandidate) -> None:
         if not candidate.chat_id or not candidate.query.strip():
             return
+        candidate.metadata.setdefault("goal_signature", build_goal_signature(candidate.chat_id, candidate.query))
         items.append(candidate)
 
     def _from_unresolved_questions(self, state: dict[str, Any]) -> list[ActiveGoalCandidate]:
@@ -186,8 +206,26 @@ class ActiveGoalSource:
         items.extend(self._from_recent_events(state))
         items.extend(self._from_relation_memories(state))
         items.extend(self._from_failed_actions(state))
-        items.sort(key=lambda item: item.score, reverse=True)
-        return items[:8]
+        history_state = state.get("history", {})
+        resolved_goal_signatures = history_state.get("resolved_goal_signatures", [])
+        resolved = {
+            str(item).strip()
+            for item in (resolved_goal_signatures if isinstance(resolved_goal_signatures, list) else [])
+            if str(item).strip()
+        }
+        deduped: list[ActiveGoalCandidate] = []
+        seen_signatures: set[str] = set()
+        for item in items:
+            goal_signature = str(item.metadata.get("goal_signature") or build_goal_signature(item.chat_id, item.query)).strip()
+            if goal_signature and goal_signature in resolved:
+                continue
+            if goal_signature and goal_signature in seen_signatures:
+                continue
+            if goal_signature:
+                seen_signatures.add(goal_signature)
+            deduped.append(item)
+        deduped.sort(key=lambda item: item.score, reverse=True)
+        return deduped[:8]
 
     def pick_goal(self, state: dict[str, Any]) -> ActiveGoalCandidate | None:
         candidates = self.collect_candidates(state)
