@@ -104,7 +104,11 @@ class IntentQueue:
         return output
 
     def requeue_delayed(self, now: Optional[float] = None) -> int:
-        """将已到期的 delayed 意图移回 ready。"""
+        """将已到期的 delayed 意图移回 ready。
+
+        注意：直接追加到 _ready_queue，不再经 enqueue()，否则会再次走 dedup 检查，
+        导致同一 intent（如 followup-receipt_xxx）在 30s 内被误判为重复而丢弃。
+        """
 
         current = now or time.time()
         remain: list[Intent] = []
@@ -116,7 +120,13 @@ class IntentQueue:
                 moved.append(intent)
         self._delayed_queue = remain
         if moved:
-            self.enqueue(moved)
+            for intent in moved:
+                if len(self._ready_queue) >= self.max_ready:
+                    self._drop_intent(intent, "ready queue overflow (requeue)")
+                    continue
+                self._ready_queue.append(intent)
+                self._lane_counts[intent.lane] += 1
+            self._sort_ready_queue()
         return len(moved)
 
     def drop_expired(self, now: Optional[float] = None) -> int:

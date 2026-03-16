@@ -99,13 +99,24 @@ class HeartbeatV2System:
         return accepted > 0
 
     def ingest_message(self, message: object) -> bool:
-        """桥接旧消息链路，把处理后的消息转成 observation 投递到 heartbeat。"""
+        """桥接消息链路：将处理后的 message 转成 observation 投递到 heartbeat，供 normal 循环使用。
+
+        要求 message 具备 chat_id 或 chat_stream.stream_id，否则无法关联会话会被拒绝。
+        """
 
         try:
             observation = self.state_fabric.build_observation(message)
         except Exception as e:  # noqa: BLE001
-            logger.error(f"build ingress observation failed: {e}")
+            logger.error(f"[v2 ingress] build observation failed: {e}", exc_info=True)
             return False
+        if not observation.chat_id:
+            logger.warning(
+                "[v2 ingress] observation has no chat_id, reject (message may lack chat_stream or stream_id)"
+            )
+            return False
+        logger.info(
+            f"[v2 ingress] observation built chat_id={observation.chat_id} message_id={observation.message_id} source={observation.source}"
+        )
         accepted = self.ingest_observation(observation)
         if accepted:
             logger.debug(
@@ -347,10 +358,13 @@ class HeartbeatV2System:
                 logger.debug("[v2 normal] tick start")
                 ingress_recent = self.observation_ingress_queue.recent(limit=30, window_seconds=180)
                 state = self.state_fabric.collect_all(
-                    self.history_store.recent(limit=40),
+                    self.history_store.recent(limit=4),
                     ingress_observations=ingress_recent,
                 )
                 self._normal_tick_count += 1
+                # 冷启动：首个 normal tick 不根据主动目标立即执行 explore，避免每次启动就搜一次
+                if self._normal_tick_count == 1:
+                    state["skip_goal_explore_this_tick"] = True
 
                 intents = await self.planner.generate_intents(self.planner.collect_inputs(state))
                 self.intent_queue.enqueue(intents)

@@ -574,7 +574,9 @@ class HeartbeatPlanner:
         pseudo_observation: dict[str, Any] | None = None
         goal_signature = ""
 
-        if active_goal and not self._is_search_cooldown(state, active_goal.chat_id, active_goal.query):
+        # 冷启动首 tick 不根据 goal 生成 explore，避免启动即搜；goal 仍保留在 state 中
+        skip_goal_explore = bool(state.get("skip_goal_explore_this_tick"))
+        if active_goal and not skip_goal_explore and not self._is_search_cooldown(state, active_goal.chat_id, active_goal.query):
             source_chat_id = active_goal.chat_id
             query = active_goal.query
             explore_reason = active_goal.reason

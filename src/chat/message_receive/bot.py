@@ -510,6 +510,7 @@ class ChatBot:
             # else:
             #     await preprocess()
 
+            # 将本条消息投递到 heartbeat_v2，供 normal 循环的 state/planner 使用（需 message 已 set chat_stream）
             try:
                 get_heartbeat_v2_system().ingest_message(message)
             except Exception as heartbeat_error:  # noqa: BLE001
