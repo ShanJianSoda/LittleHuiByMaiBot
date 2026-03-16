@@ -387,6 +387,7 @@ class HeartbeatPlanner:
             chat_summary=state.get("chat", {}),
             capability_summary=state.get("capability", {}),
             goal_summary=state.get("goal", {}),
+            current_planners=state.get("current_planners", []),
             knock_summary=knock_manager.build_prompt_contact_summary(chat_ids=prompt_chat_ids, limit=20),
             allowed_intent_types=["reply", "retrieve", "no_op"],
         )

@@ -14,6 +14,7 @@ from typing import Any
 
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.common.logger import get_logger
+from src.config.config import global_config
 from src.memory_system.memory_retrieval import build_memory_retrieval_prompt
 from src.plugin_system.apis import message_api
 from src.plugin_system.apis.tool_api import get_tool_instance
@@ -145,6 +146,7 @@ class WebSearchSkill(BaseSkill):
                 "used_tools": [],
             }
 
+        max_results = max(1, min(10, int(getattr(global_config.heartbeat, "search_web_max_results", 3))))
         tool_args = {
             "question": context.query,
             "chat_history": context.chat_history,
@@ -153,6 +155,7 @@ class WebSearchSkill(BaseSkill):
             "metadata": {
                 **(context.metadata if isinstance(context.metadata, dict) else {}),
                 "sender": context.sender,
+                "max_results": max_results,  # 约束 Tavily 等返回条数，插件侧读取后可限制
             },
         }
         logger.info(

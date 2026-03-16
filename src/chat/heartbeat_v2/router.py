@@ -45,6 +45,15 @@ class ActionRouter:
                 use_reply_generator = bool(action_args.get("use_reply_generator", False))
                 if not chat_id:
                     return False, "missing_chat_id", {}
+                # 呼唤类短句（小绘小绘/在吗等）+ 短 draft 时直接发 draft，避免 replyer 用整段上下文生成成段内容导致「没回复呼唤」
+                observation = action_args.get("observation") or {}
+                obs_text = (observation.get("text") or "").strip() if isinstance(observation, dict) else ""
+                if use_reply_generator and text and len(text) <= 30 and obs_text and len(obs_text) <= 25:
+                    if any(k in obs_text for k in ("小绘", "在吗", "在不在", "在么", "喂", "嘿")):
+                        use_reply_generator = False
+                        logger.debug(
+                            "[router] reply: use draft for call-like observation (avoid generator overwrite)"
+                        )
                 if use_reply_generator:
                     ok, reason, outputs = await reply_generator_adapter.generate_and_send(action_args)
                     logger.debug(

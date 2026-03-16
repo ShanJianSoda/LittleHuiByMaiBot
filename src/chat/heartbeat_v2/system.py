@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import replace
 from typing import Optional
 
 from src.common.logger import get_logger
@@ -18,7 +19,7 @@ from .experience_store import experience_store
 from .history_store import HistoryStore
 from .ingress_queue import ObservationIngressQueue
 from .intent_queue import IntentQueue
-from .models import ExecutionReceipt, HeartbeatTickMeta, Intent, Observation
+from .models import ExecutionReceipt, HeartbeatTickMeta, Intent, Observation, _new_id
 from .planner import HeartbeatPlanner
 from .policy_gate import PolicyGate
 from .reflection import ReflectionEngine
@@ -392,6 +393,25 @@ class HeartbeatV2System:
                         f"latency_ms={receipt.latency_ms}"
                     )
                     receipts.append(receipt)
+                    # 因 reply_cooldown 被 skip 的 reply（如 followup 分享搜索结果）延迟重入队，下个冷却后再发
+                    if (
+                        receipt.status == "skipped"
+                        and receipt.reason == "reply_cooldown"
+                        and intent.type == "reply"
+                    ):
+                        delay_s = max(1, int(getattr(global_config.heartbeat, "min_reply_interval_seconds", 30)))
+                        delayed_intent = replace(
+                            intent,
+                            intent_id=_new_id("intent"),
+                            delayed_until=time.time() + delay_s,
+                        )
+                        n = self.intent_queue.enqueue(delayed_intent)
+                        if n:
+                            logger.info(
+                                "[v2 normal] re-enqueue reply (reply_cooldown) delayed_for_s=%s intent_id=%s",
+                                delay_s,
+                                delayed_intent.intent_id,
+                            )
                     try:
                         reflection = self.reflection_engine.reflect(intent=intent, receipt=receipt, state=state)
                         reflection_dict = reflection.to_dict()

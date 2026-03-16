@@ -283,6 +283,11 @@ class HeartbeatExecutor:
                     f"[executor] search_web done plan_id={plan.plan_id} chat_id={plan.action_args.get('chat_id') or '-'} "
                     f"ok={ok} reason={route_reason} elapsed_ms={latency_ms}"
                 )
+            # reply 实际发送成功后再更新冷却，避免同 tick 内第二条 reply 被误判为冷却期内
+            if plan.action_type == "reply" and ok:
+                chat_id = str(plan.action_args.get("chat_id") or "").strip()
+                if chat_id:
+                    self.policy_gate.record_reply_sent(chat_id)
             return self.record_receipt(
                 plan=plan,
                 status="success" if ok else "failed",
