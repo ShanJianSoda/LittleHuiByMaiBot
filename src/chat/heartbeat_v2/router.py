@@ -146,14 +146,22 @@ class ActionRouter:
                 observation = action_args.get("observation") or {}
                 share_target_chat_id = str(action_args.get("share_target_chat_id", "")).strip() or chat_id
                 if not chat_id:
+                    logger.warning("[router] search_web missing_chat_id")
                     return False, "missing_chat_id", {}
                 if not query:
+                    logger.warning("[router] search_web empty_search_query chat_id=%s", chat_id)
                     return False, "empty_search_query", {}
+                logger.info(
+                    "[router] search_web start chat_id=%s query_preview=%s",
+                    chat_id,
+                    query[:80] if query else "",
+                )
                 search_result = await skill_orchestrator.run_web_search(
                     chat_id=chat_id,
                     query=query,
                     observation=observation if isinstance(observation, dict) else {},
                 )
+                elapsed_ms = int((time.time() - started_at) * 1000)
                 search_result["source_chat_id"] = source_chat_id
                 search_result["share_target_chat_id"] = share_target_chat_id
                 search_result["explore_reason"] = str(action_args.get("explore_reason", "")).strip()
@@ -165,15 +173,19 @@ class ActionRouter:
                 skill_results = search_result.get("skill_results", [])
                 first_result = skill_results[0] if isinstance(skill_results, list) and skill_results else {}
                 skill_status = str(first_result.get("status") or "").strip() if isinstance(first_result, dict) else ""
+                skill_reason = str(first_result.get("reason") or "").strip() if isinstance(first_result, dict) else ""
                 if skill_status == "failed":
-                    logger.debug(
-                        f"[router] done {self._summarize_action(action_type, action_args)} ok=False "
-                        f"reason=search_failed elapsed_ms={int((time.time() - started_at) * 1000)}"
+                    logger.info(
+                        "[router] search_web done ok=False reason=search_failed chat_id=%s elapsed_ms=%d skill_reason=%s",
+                        chat_id,
+                        elapsed_ms,
+                        skill_reason or "-",
                     )
                     return False, "search_failed", search_result
-                logger.debug(
-                    f"[router] done {self._summarize_action(action_type, action_args)} ok=True "
-                    f"reason=search_completed elapsed_ms={int((time.time() - started_at) * 1000)}"
+                logger.info(
+                    "[router] search_web done ok=True reason=search_completed chat_id=%s elapsed_ms=%d",
+                    chat_id,
+                    elapsed_ms,
                 )
                 return True, "search_completed", search_result
 

@@ -378,26 +378,27 @@ class ChatBot:
         else:
             logger.warning(f"更新消息ID失败: {mmc_message_id} -> {actual_message_id}")
 
-    # async def input_status_process(self, raw_data: Dict[str, Any]) -> None:
-    #     """
-    #     处理输入状态通知
-    #     """
-    #     message_data: Dict[str, Any] = raw_data.get("content", {})
-    #     if not message_data:
-    #         return
-    #     message_type = message_data.get("type")
-    #     if message_type != "input_status":
-    #         return
-        
-    #     user_id = message_data.get("user_id")
-    #     group_id = message_data.get("group_id")
-    #     is_typing = message_data.get("is_typing", False)
-    #     status_text = message_data.get("status_text", "")
-        
-    #     if is_typing:
-    #         logger.info(f"[输入状态] 用户 {user_id} 正在输入..." + (f" (群: {group_id})" if group_id else ""))
-    #     else:
-    #         logger.debug(f"[输入状态] 用户 {user_id} 停止输入" + (f" (群: {group_id})" if group_id else ""))
+    async def input_status_process(self, raw_data: Dict[str, Any]) -> None:
+        """
+        处理输入状态通知（input_status）。注册后 maim_message 不再报「未注册的自定义消息类型」，
+        且能拿到 raw_data 中的 chat/群/用户信息，便于后续若需按会话做轻量处理。
+        当前仅做静默接收与可选 debug 日志，不触发回复。
+        """
+        message_data: Dict[str, Any] = raw_data.get("content", {}) if isinstance(raw_data, dict) else {}
+        if not message_data:
+            return
+        message_type = message_data.get("type")
+        if message_type != "input_status":
+            return
+        user_id = message_data.get("user_id", "")
+        group_id = message_data.get("group_id", "")
+        is_typing = message_data.get("is_typing", False)
+        logger.debug(
+            "[input_status] %s user_id=%s group_id=%s",
+            "正在输入" if is_typing else "停止输入",
+            user_id,
+            group_id or "(私聊)",
+        )
 
     async def message_process(self, message_data: Dict[str, Any]) -> None:
         """处理转化后的统一格式消息

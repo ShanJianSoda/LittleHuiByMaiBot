@@ -59,24 +59,26 @@ class HeartbeatV2System:
 
         self._running = False
         self._tasks: list[asyncio.Task] = []
+        self._normal_tick_count = 0
 
     def _log_task_done(self, task: asyncio.Task) -> None:
+        """任务结束回调：记录取消、异常或正常退出，便于生命周期观测。"""
         task_name = task.get_name()
         if task.cancelled():
-            logger.info(f"[v2 task] cancelled name={task_name}")
+            logger.info(f"[v2 task] done name={task_name} (cancelled)")
             return
         try:
             exception = task.exception()
         except Exception as e:  # noqa: BLE001
-            logger.error(f"[v2 task] inspect failed name={task_name}: {e}", exc_info=True)
+            logger.error(f"[v2 task] done name={task_name} (inspect failed): {e}", exc_info=True)
             return
         if exception is not None:
             logger.error(
-                f"[v2 task] crashed name={task_name}: {exception}",
+                f"[v2 task] done name={task_name} (crashed): {exception}",
                 exc_info=(type(exception), exception, exception.__traceback__),
             )
             return
-        logger.warning(f"[v2 task] exited unexpectedly name={task_name}")
+        logger.info(f"[v2 task] done name={task_name} (exited)")
 
     def _summarize_intent(self, intent: Intent) -> str:
         payload = intent.payload if isinstance(intent.payload, dict) else {}
@@ -203,6 +205,39 @@ class HeartbeatV2System:
         return ""
 
     def _build_followup_intents(self, receipt: ExecutionReceipt) -> list[Intent]:
+        # search_web 超时时向目标会话发送简短失败提示，避免用户无反馈
+        if (
+            receipt.status == "failed"
+            and receipt.action_type == "search_web"
+            and "timeout" in str(receipt.reason or "").lower()
+        ):
+            chat_id = str(receipt.outputs.get("chat_id") or "").strip()
+            if chat_id:
+                return [
+                    Intent.create(
+                        source="receipt",
+                        intent_type="reply",
+                        target_chat_id=chat_id,
+                        payload={
+                            "chat_id": chat_id,
+                            "text": "搜索超时，稍后再试。",
+                            "reply_reason": "search_web_timeout",
+                            "use_reply_generator": False,
+                        },
+                        dedup_key=f"timeout-followup-{receipt.receipt_id}",
+                        expire_after_s=60,
+                        delayed_for_s=0,
+                        lane="normal",
+                        priority=0.5,
+                        urgency=0.4,
+                        confidence=0.8,
+                        cost_hint=0.05,
+                        risk_hint=0.05,
+                        interruptiveness=0.1,
+                    )
+                ]
+            return []
+
         if not self._should_build_followup(receipt):
             return []
 
@@ -285,6 +320,7 @@ class HeartbeatV2System:
     async def _fast_loop(self) -> None:
         """快速循环：轻量 requeue_delayed、drop_expired。"""
 
+        logger.info("[v2 fast] loop started")
         interval = max(1, int(global_config.heartbeat.fast_interval))
         while self._running:
             try:
@@ -294,10 +330,12 @@ class HeartbeatV2System:
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[v2 fast] loop error: {e}")
             await asyncio.sleep(interval)
+        logger.info("[v2 fast] loop exiting (stop requested)")
 
     async def _normal_loop(self) -> None:
         """主规划循环：collect -> generate -> enqueue -> dequeue -> execute -> receipt -> history。"""
 
+        logger.info("[v2 normal] loop started")
         interval = max(1, int(global_config.heartbeat.normal_interval))
         while self._running:
             started_at = time.time()
@@ -312,6 +350,7 @@ class HeartbeatV2System:
                     self.history_store.recent(limit=40),
                     ingress_observations=ingress_recent,
                 )
+                self._normal_tick_count += 1
 
                 intents = await self.planner.generate_intents(self.planner.collect_inputs(state))
                 self.intent_queue.enqueue(intents)
@@ -374,10 +413,12 @@ class HeartbeatV2System:
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[v2 normal] loop error: {e}", exc_info=True)
             await asyncio.sleep(interval)
+        logger.info("[v2 normal] loop exiting (stop requested)")
 
     async def _slow_loop(self) -> None:
         """慢速循环：队列与历史观测日志。"""
 
+        logger.info("[v2 slow] loop started")
         interval = max(10, int(global_config.heartbeat.slow_interval))
         while self._running:
             try:
@@ -394,6 +435,7 @@ class HeartbeatV2System:
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[v2 slow] loop error: {e}")
             await asyncio.sleep(interval)
+        logger.info("[v2 slow] loop exiting (stop requested)")
 
     def get_recent_history(self, limit: int = 20) -> list[dict]:
         """获取最近 N 次心跳历史（含 intent 与 receipt）。"""

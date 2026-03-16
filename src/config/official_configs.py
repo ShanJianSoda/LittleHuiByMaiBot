@@ -988,6 +988,12 @@ class HeartbeatConfig(ConfigBase):
     search_followup_expire_seconds: int = 600
     """搜索 followup reply 的过期时间（秒）"""
 
+    search_web_timeout_seconds: int = 120
+    """
+    search_web 单次执行的总体超时（秒）。
+    链路为：查询重写 LLM → 搜索引擎 → 结果总结 LLM，重写/总结若用推理模型易超时，45s 不足，建议 90–120。
+    """
+
     history_max_items: int = 100
     """最近心跳历史保存条数"""
 

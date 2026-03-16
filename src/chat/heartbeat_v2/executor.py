@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from src.common.logger import get_logger
+from src.config.config import global_config
 
 from .models import ExecutionReceipt, Intent, Plan, PlanExecutionState, PlanGraph, PlanNode, PlanStepState
 from .policy_gate import PolicyGate
@@ -71,6 +72,7 @@ class HeartbeatExecutor:
                 timeout_s=30,
             )
         if intent.type == "explore":
+            search_timeout = max(60, int(getattr(global_config.heartbeat, "search_web_timeout_seconds", 120)))
             return Plan.create(
                 intent_id=intent.intent_id,
                 action_type="search_web",
@@ -88,7 +90,7 @@ class HeartbeatExecutor:
                     "selector_candidates_preview": intent.payload.get("selector_candidates_preview", []),
                 },
                 policy_tags=["tool_use", "active_explore"],
-                timeout_s=45,
+                timeout_s=search_timeout,
             )
         return Plan.create(
             intent_id=intent.intent_id,
@@ -266,22 +268,36 @@ class HeartbeatExecutor:
                 latency_ms=int((time.time() - start) * 1000),
             )
 
-        logger.debug(f"[executor] start {self._describe_plan(plan)}")
+        desc = self._describe_plan(plan)
+        logger.debug(f"[executor] start {desc}")
+        if plan.action_type == "search_web":
+            logger.info(f"[executor] search_web start {desc}")
         try:
             ok, route_reason, outputs = await asyncio.wait_for(
                 self.router.route(plan.action_type, plan.action_args),
                 timeout=max(1, int(plan.timeout_s)),
             )
+            latency_ms = int((time.time() - start) * 1000)
+            if plan.action_type == "search_web":
+                logger.info(
+                    f"[executor] search_web done plan_id={plan.plan_id} chat_id={plan.action_args.get('chat_id') or '-'} "
+                    f"ok={ok} reason={route_reason} elapsed_ms={latency_ms}"
+                )
             return self.record_receipt(
                 plan=plan,
                 status="success" if ok else "failed",
                 reason=route_reason,
                 outputs=self._build_receipt_outputs(plan, outputs),
-                latency_ms=int((time.time() - start) * 1000),
+                latency_ms=latency_ms,
             )
         except TimeoutError:
             latency_ms = int((time.time() - start) * 1000)
-            logger.error(f"[executor] timeout {self._describe_plan(plan)} elapsed_ms={latency_ms}")
+            if plan.action_type == "search_web":
+                logger.error(
+                    f"[executor] search_web timeout {desc} elapsed_ms={latency_ms} (limit={plan.timeout_s}s)"
+                )
+            else:
+                logger.error(f"[executor] timeout {desc} elapsed_ms={latency_ms}")
             return self.record_receipt(
                 plan=plan,
                 status="failed",

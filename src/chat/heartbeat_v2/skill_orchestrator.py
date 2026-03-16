@@ -130,8 +130,13 @@ class WebSearchSkill(BaseSkill):
         return bool(context.query.strip())
 
     async def run(self, context: SkillContext) -> dict[str, Any]:
+        _start = time.time()
         tool_instance = get_tool_instance("web_search", context.chat_stream)
         if tool_instance is None:
+            logger.warning(
+                "[WebSearchSkill] web_search tool unavailable chat_id=%s (plugin not loaded or not registered)",
+                context.chat_id,
+            )
             return {
                 "skill_name": self.name,
                 "status": "failed",
@@ -151,13 +156,31 @@ class WebSearchSkill(BaseSkill):
             },
         }
         logger.info(
-            f"WebSearchSkill context ready for {context.chat_id}: "
-            f"history_chars={len(context.chat_history)} observation_keys={list(context.observation.keys())[:6]}"
+            "[WebSearchSkill] calling web_search tool chat_id=%s query_preview=%s history_chars=%d",
+            context.chat_id,
+            (context.query or "")[:60],
+            len(context.chat_history or ""),
         )
         try:
             result = await tool_instance.execute(tool_args)
+            tool_elapsed_ms = int((time.time() - _start) * 1000)
+            content_preview = ""
+            if isinstance(result, dict):
+                content_preview = (str(result.get("content") or "")).strip()[:100]
+            logger.info(
+                "[WebSearchSkill] web_search tool returned chat_id=%s elapsed_ms=%d content_preview=%s",
+                context.chat_id,
+                tool_elapsed_ms,
+                content_preview or "(empty)",
+            )
         except Exception as e:  # noqa: BLE001
-            logger.error(f"WebSearchSkill failed for {context.chat_id}: {e}", exc_info=True)
+            logger.error(
+                "[WebSearchSkill] web_search tool failed chat_id=%s elapsed_ms=%d: %s",
+                context.chat_id,
+                int((time.time() - _start) * 1000),
+                e,
+                exc_info=True,
+            )
             return {
                 "skill_name": self.name,
                 "status": "failed",
@@ -434,8 +457,30 @@ class SkillOrchestrator:
         query: str,
         observation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _start = time.time()
+        logger.info(
+            "[skill_orchestrator] run_web_search start chat_id=%s query_preview=%s",
+            chat_id,
+            (query or "")[:80],
+        )
         context = self._load_chat_context(chat_id, query, observation)
+        logger.debug(
+            "[skill_orchestrator] run_web_search context loaded chat_id=%s history_chars=%d",
+            chat_id,
+            len(context.chat_history or ""),
+        )
         result = await self.web_search_skill.run(context)
+        elapsed_ms = int((time.time() - _start) * 1000)
+        status = result.get("status", "")
+        content_len = len(str(result.get("content") or ""))
+        logger.info(
+            "[skill_orchestrator] run_web_search done chat_id=%s status=%s reason=%s content_len=%d elapsed_ms=%d",
+            chat_id,
+            status,
+            result.get("reason", ""),
+            content_len,
+            elapsed_ms,
+        )
         return {
             "chat_id": chat_id,
             "query": query,
