@@ -7,6 +7,11 @@ heartbeat_v2 planner prompt 定义。
 3. 提供最小的渲染与解析辅助函数
 
 后续 planner 真正接 LLM 时，优先复用这里的输入/输出协议。
+
+提示词长度策略：
+- 规划器（本文件）：仅注入「精简」心跳历史，控制 token，保留角色特质与决策所需最小信息。
+- 意图消费者（executor/reply_generator_adapter 等）：通过 state["history"] 使用完整历史，
+  在具体执行时再组装相对完整的提示词内容。
 """
 from __future__ import annotations
 
@@ -17,6 +22,9 @@ from src.chat.utils.prompt_builder import Prompt
 from src.common.knock import knock_manager
 
 from .structured_output import parse_structured_json
+
+# 规划器侧心跳历史在 prompt 中的最大字符数，避免提示词过长
+PLANNER_HEARTBEAT_HISTORY_MAX_CHARS = 1500
 
 
 PLANNER_ALLOWED_INTENT_TYPES = [
@@ -175,6 +183,9 @@ PLANNER_PROMPT_TEMPLATE = Prompt(
 当前元信息：
 {current_meta}
 
+当前情绪（供规划时参考）：
+{mood_summary}
+
 最近心跳历史：
 {heartbeat_history}
 
@@ -225,9 +236,66 @@ def _json_block(value: Any, *, max_chars: int = 4000) -> str:
     return rendered[: max_chars - 20] + "\n...<truncated>..."
 
 
+def compress_heartbeat_history_for_planner(
+    heartbeat_history: list[dict[str, Any]] | None,
+    *,
+    max_ticks: int = 2,
+) -> list[dict[str, Any]]:
+    """
+    将心跳历史压缩为规划器提示用摘要，保留角色特质与决策所需最小信息，控制 token。
+
+    仅保留：每 tick 的 meta 摘要、intent 类型与 chat_id、receipt 类型与 status。
+    完整历史仍通过 state["history"] 提供给意图消费者（executor 等）使用。
+    """
+    if not heartbeat_history or not isinstance(heartbeat_history, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for tick in heartbeat_history[-max_ticks:]:
+        if not isinstance(tick, dict):
+            continue
+        meta = tick.get("meta") or {}
+        if isinstance(meta, dict):
+            slim_meta = {
+                "loop_type": meta.get("loop_type"),
+                "started_at": meta.get("started_at"),
+                "queue_ready": meta.get("queue_ready_len"),
+                "queue_delayed": meta.get("queue_delayed_len"),
+            }
+        else:
+            slim_meta = {}
+        intents = tick.get("intents") or []
+        slim_intents = []
+        for i in intents[:5]:
+            if not isinstance(i, dict):
+                continue
+            slim_intents.append({
+                "type": i.get("type"),
+                "chat_id": (i.get("target_chat_id") or (i.get("payload") or {}).get("chat_id")) if isinstance(i.get("payload"), dict) else i.get("target_chat_id"),
+            })
+        receipts = tick.get("receipts") or []
+        slim_receipts = []
+        for r in receipts[:5]:
+            if not isinstance(r, dict):
+                continue
+            slim_receipts.append({
+                "action_type": r.get("action_type"),
+                "status": r.get("status"),
+                "chat_id": (r.get("outputs") or {}).get("chat_id") if isinstance(r.get("outputs"), dict) else None,
+            })
+        out.append({
+            "meta": slim_meta,
+            "intent_count": len(intents),
+            "intents": slim_intents,
+            "receipt_count": len(receipts),
+            "receipts": slim_receipts,
+        })
+    return out
+
+
 def build_planner_prompt_input(
     *,
     current_meta: dict[str, Any] | None = None,
+    mood_summary: str | None = None,
     heartbeat_history: list[dict[str, Any]] | None = None,
     input_source_summary: dict[str, Any] | None = None,
     input_content_summary: dict[str, Any] | None = None,
@@ -239,7 +307,8 @@ def build_planner_prompt_input(
     knock_summary: list[dict[str, Any]] | None = None,
     allowed_intent_types: list[str] | None = None,
 ) -> dict[str, str]:
-    humanized_history = knock_manager.humanize_structure(heartbeat_history or [])
+    compressed_history = compress_heartbeat_history_for_planner(heartbeat_history)
+    humanized_history = knock_manager.humanize_structure(compressed_history)
     humanized_input_source = knock_manager.humanize_structure(input_source_summary or {})
     humanized_input_content = knock_manager.humanize_structure(input_content_summary or {})
     humanized_observations = knock_manager.humanize_structure(latest_observations or [])
@@ -254,7 +323,10 @@ def build_planner_prompt_input(
         "allowed_expire_tiers": ", ".join(PLANNER_ALLOWED_EXPIRE_TIERS),
         "allowed_delay_tiers": ", ".join(PLANNER_ALLOWED_DELAY_TIERS),
         "current_meta": _json_block(knock_manager.humanize_structure(current_meta or {})),
-        "heartbeat_history": _json_block(humanized_history),
+        "mood_summary": (mood_summary or "").strip() or "（未提供）",
+        "heartbeat_history": _json_block(
+            humanized_history, max_chars=PLANNER_HEARTBEAT_HISTORY_MAX_CHARS
+        ),
         "input_source_summary": _json_block(humanized_input_source),
         "input_content_summary": _json_block(humanized_input_content),
         "latest_observations": _json_block(humanized_observations),
@@ -272,6 +344,7 @@ def build_planner_prompt_input(
 def render_planner_prompt(
     *,
     current_meta: dict[str, Any] | None = None,
+    mood_summary: str | None = None,
     heartbeat_history: list[dict[str, Any]] | None = None,
     input_source_summary: dict[str, Any] | None = None,
     input_content_summary: dict[str, Any] | None = None,
@@ -285,6 +358,7 @@ def render_planner_prompt(
 ) -> str:
     kwargs = build_planner_prompt_input(
         current_meta=current_meta,
+        mood_summary=mood_summary,
         heartbeat_history=heartbeat_history,
         input_source_summary=input_source_summary,
         input_content_summary=input_content_summary,

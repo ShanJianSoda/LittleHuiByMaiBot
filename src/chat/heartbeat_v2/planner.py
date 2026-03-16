@@ -12,6 +12,7 @@ from typing import Any
 from src.common.logger import get_logger
 from src.common.knock import knock_manager
 from src.config.config import global_config, model_config
+from src.mood.emotion_engine import get_mood_for_prompt
 from src.plugin_system.apis import llm_api
 
 from .active_goal_source import (
@@ -377,6 +378,7 @@ class HeartbeatPlanner:
                 "fallback_mode": "rule_planner_for_other_or_invalid_outputs",
                 "generated_at": time.time(),
             },
+            mood_summary=get_mood_for_prompt("global", include_vad=True),
             heartbeat_history=state.get("history", {}).get("last_tick") and [state.get("history", {}).get("last_tick")] or [],
             input_source_summary=self._build_input_source_summary(state),
             input_content_summary=self._build_input_content_summary(state),

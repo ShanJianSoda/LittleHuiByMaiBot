@@ -38,6 +38,12 @@ src/chat/replyer/replyer_manager 负责在不同场景下选用 group/private ge
 
 
 
+心跳历史放进提示词中，我认为最大的用处是提醒模型它之前几次（此处可用策略，比如前1,2,4,8,次）是怎么想的，相比这个，其他的一些数据放进去就没啥用了
+
+先查看心跳历史中有什么，可能只是简单的规划器内容，
+
+
+
 # TODO
 
 ## 通用
@@ -176,6 +182,8 @@ src/chat/replyer/replyer_manager 负责在不同场景下选用 group/private ge
 > [!TIP]
 >
 > 先了解原项目的memory_system，再了解fork的memory_graph，和OpenClaw的三层记忆
+
+https://linux.do/t/topic/1711075  网状+权重 记忆； 向量 + 维护（拥有独特的相关度的数据结构）
 
 
 

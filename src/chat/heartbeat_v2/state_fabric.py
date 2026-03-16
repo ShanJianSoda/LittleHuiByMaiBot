@@ -15,6 +15,7 @@ from src.common.knock import knock_manager
 from src.common.database.database_model import ChatHistory, Expression, Messages, PersonInfo, ThinkingBack
 from src.common.logger import get_logger
 from src.mood.mood_manager import mood_manager
+from src.mood.emotion_engine import get_mood_for_prompt
 
 from .active_goal_source import active_goal_source, build_goal_signature
 from .capability_registry import capability_registry
@@ -161,19 +162,26 @@ class StateFabric:
         return self.build_observation(item).to_dict()
 
     def collect_mood_state(self) -> dict[str, Any]:
-        """收集情绪状态（mood_state、emotion_v/a/d）。"""
+        """
+        收集情绪状态（mood_state、mood_for_prompt、可选 emotion_v/a/d）。
 
+        mood_for_prompt：供提示词使用的描述，优先含 VAD 转描述（vad_to_bucket），
+        与 get_mood_for_prompt(chat_id, include_vad=True) 一致，供 consumer 拼完整提示词用。
+        """
         try:
             mood = mood_manager.get_mood_by_chat_id("global")
+            mood_state = getattr(mood, "mood_state", "") or ""
+            mood_for_prompt = get_mood_for_prompt("global", include_vad=True)
             return {
-                "mood_state": getattr(mood, "mood_state", ""),
+                "mood_state": mood_state,
+                "mood_for_prompt": mood_for_prompt,
                 "emotion_v": getattr(mood, "emotion_v", None),
                 "emotion_a": getattr(mood, "emotion_a", None),
                 "emotion_d": getattr(mood, "emotion_d", None),
             }
         except Exception as e:  # noqa: BLE001
             logger.error(f"collect_mood_state failed: {e}")
-            return {"mood_state": "unknown"}
+            return {"mood_state": "unknown", "mood_for_prompt": "unknown"}
 
     def collect_memory_state(self, chat_ids: list[str] | None = None) -> dict[str, Any]:
         """收集事件、事实、策略三层记忆快照。"""

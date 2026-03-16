@@ -31,15 +31,18 @@ def get_mood_for_prompt(chat_id: str, include_vad: bool = False) -> str:
     from src.mood.mood_manager import mood_manager
     
     chat_mood = mood_manager.get_mood_by_chat_id(chat_id)
-    base = chat_mood.mood_state
+    base = (chat_mood.mood_state or "").strip()
     if not include_vad:
-        return base
+        return base or "（未提供）"
     dyn = _global_dynamics
     if dyn is None:
-        return base
+        return base or "（未提供）"
     v, a, d = dyn.get_state()
     bucket = vad_to_bucket(v, a, d)
-    return f"{base}（当前VAD: {bucket}）"
+    # 若 mood_state 已是 VAD 转描述（如 use_vad_path 下），避免重复拼接
+    if (bucket or "").strip() == base:
+        return base
+    return f"{base}（当前VAD: {bucket}）" if base else bucket
 
 
 def get_vad_state(chat_id: str) -> Optional[Tuple[float, float, float]]:
