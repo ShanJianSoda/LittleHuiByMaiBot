@@ -500,14 +500,14 @@ class ChatBot:
             else:
                 template_group_name = None
 
-            async def preprocess():
-                await self.heartflow_message_receiver.process_message(message)
+            # async def preprocess():
+            #     await self.heartflow_message_receiver.process_message(message)
 
-            if template_group_name:
-                async with global_prompt_manager.async_message_scope(template_group_name):
-                    await preprocess()
-            else:
-                await preprocess()
+            # if template_group_name:
+            #     async with global_prompt_manager.async_message_scope(template_group_name):
+            #         await preprocess()
+            # else:
+            #     await preprocess()
 
             try:
                 get_heartbeat_v2_system().ingest_message(message)
