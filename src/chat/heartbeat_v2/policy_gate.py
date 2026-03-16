@@ -43,8 +43,12 @@ class PolicyGate:
             now = time.time()
             if now - last_at < self.min_reply_interval_seconds:
                 return False, "reply_cooldown"
-            self._last_reply_at[chat_id] = now
+            # 不在 allow 时更新 _last_reply_at，改为在「实际发送成功」后由 record_reply_sent 更新，避免同 tick 内第二条 reply 被误判冷却
         return True, "allowed"
+
+    def record_reply_sent(self, chat_id: str, at: float | None = None) -> None:
+        """在 reply 实际发送成功后调用，用于更新冷却时间（以发送时刻为准）。"""
+        self._last_reply_at[str(chat_id)] = at if at is not None else time.time()
 
     def _is_active_now(self) -> bool:
         now = time.localtime()

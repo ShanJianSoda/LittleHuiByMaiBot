@@ -90,7 +90,7 @@ class HeartFCMessageReceiver:
                 except Exception as mood_e:
                     logger.warning(f"情绪更新失败（不影响主流程）: {mood_e}")
 
-            await heartflow.get_or_create_heartflow_chat(chat.stream_id)  # type: ignore
+            # await heartflow.get_or_create_heartflow_chat(chat.stream_id)  # type: ignore
 
             # 3. 日志记录
             mes_name = chat.group_info.group_name if chat.group_info else "私聊"

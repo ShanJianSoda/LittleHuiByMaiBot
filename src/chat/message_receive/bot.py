@@ -501,14 +501,14 @@ class ChatBot:
             else:
                 template_group_name = None
 
-            # async def preprocess():
-            #     await self.heartflow_message_receiver.process_message(message)
+            async def preprocess():
+                await self.heartflow_message_receiver.process_message(message)
 
-            # if template_group_name:
-            #     async with global_prompt_manager.async_message_scope(template_group_name):
-            #         await preprocess()
-            # else:
-            #     await preprocess()
+            if template_group_name:
+                async with global_prompt_manager.async_message_scope(template_group_name):
+                    await preprocess()
+            else:
+                await preprocess()
 
             # 将本条消息投递到 heartbeat_v2，供 normal 循环的 state/planner 使用（需 message 已 set chat_stream）
             try:

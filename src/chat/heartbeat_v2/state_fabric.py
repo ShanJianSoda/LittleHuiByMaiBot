@@ -554,4 +554,10 @@ class StateFabric:
         except Exception as e:  # noqa: BLE001
             logger.error(f"collect_goal_state failed: {e}")
             state["goal"] = {"candidates": [], "count": 0}
+        try:
+            from .current_planners import current_planners_store
+            state["current_planners"] = current_planners_store.list_for_state(limit=20)
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"collect current_planners failed: {e}")
+            state["current_planners"] = []
         return state

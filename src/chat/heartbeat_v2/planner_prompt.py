@@ -210,6 +210,9 @@ PLANNER_PROMPT_TEMPLATE = Prompt(
 主动目标候选：
 {goal_summary}
 
+当前规划任务（current_planners，pending 待办）：
+{current_planners_summary}
+
 可聊天对象（knock 联系方式）：
 {knock_summary}
 
@@ -304,6 +307,7 @@ def build_planner_prompt_input(
     chat_summary: dict[str, Any] | None = None,
     capability_summary: dict[str, Any] | None = None,
     goal_summary: dict[str, Any] | None = None,
+    current_planners: list[dict[str, Any]] | None = None,
     knock_summary: list[dict[str, Any]] | None = None,
     allowed_intent_types: list[str] | None = None,
 ) -> dict[str, str]:
@@ -315,6 +319,7 @@ def build_planner_prompt_input(
     humanized_memory = knock_manager.humanize_structure(memory_summary or {})
     humanized_chat = knock_manager.humanize_structure(chat_summary or {})
     humanized_goal = knock_manager.humanize_structure(goal_summary or {})
+    humanized_current_planners = knock_manager.humanize_structure(current_planners or [])
     effective_intent_types = allowed_intent_types or PLANNER_ALLOWED_INTENT_TYPES
     return {
         "allowed_intent_types": ", ".join(effective_intent_types),
@@ -334,6 +339,7 @@ def build_planner_prompt_input(
         "chat_summary": _json_block(humanized_chat),
         "capability_summary": _json_block(capability_summary or {}),
         "goal_summary": _json_block(humanized_goal),
+        "current_planners_summary": _json_block(humanized_current_planners),
         "knock_summary": _json_block(knock_summary or knock_manager.build_prompt_contact_summary(limit=20)),
         "payload_templates": _json_block(PLANNER_INTENT_PAYLOAD_TEMPLATES, max_chars=4000),
         "output_schema": _json_block(PLANNER_OUTPUT_SCHEMA, max_chars=6000),
@@ -353,6 +359,7 @@ def render_planner_prompt(
     chat_summary: dict[str, Any] | None = None,
     capability_summary: dict[str, Any] | None = None,
     goal_summary: dict[str, Any] | None = None,
+    current_planners: list[dict[str, Any]] | None = None,
     knock_summary: list[dict[str, Any]] | None = None,
     allowed_intent_types: list[str] | None = None,
 ) -> str:
@@ -367,6 +374,7 @@ def render_planner_prompt(
         chat_summary=chat_summary,
         capability_summary=capability_summary,
         goal_summary=goal_summary,
+        current_planners=current_planners,
         knock_summary=knock_summary,
         allowed_intent_types=allowed_intent_types,
     )

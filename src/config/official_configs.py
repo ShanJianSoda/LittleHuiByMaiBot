@@ -994,6 +994,9 @@ class HeartbeatConfig(ConfigBase):
     链路为：查询重写 LLM → 搜索引擎 → 结果总结 LLM，重写/总结若用推理模型易超时，45s 不足，建议 90–120。
     """
 
+    search_web_max_results: int = 3
+    """web_search（如 Tavily）返回结果条数上限，供插件侧读取以约束条数。"""
+
     history_max_items: int = 100
     """最近心跳历史保存条数"""
 
