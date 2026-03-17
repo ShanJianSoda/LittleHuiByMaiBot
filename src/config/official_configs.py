@@ -265,6 +265,14 @@ class MessageReceiveConfig(ConfigBase):
     )
     """各类通知消息的去重时间窗口（秒），0 表示不去重"""
 
+    # 图片/表情限流：避免短时间大量图片导致内存爆掉、进程退出
+    image_rate_limit_enabled: bool = True
+    """是否启用图片（含表情）处理限流"""
+    image_rate_limit_max: int = 10
+    """时间窗口内每个聊天流最多处理的图片+表情数量，超出则跳过 VLM/存储，仅保留占位文案"""
+    image_rate_limit_window_seconds: int = 60
+    """限流时间窗口（秒）"""
+
 
 @dataclass
 class MemoryConfig(ConfigBase):

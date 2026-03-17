@@ -190,6 +190,11 @@ ban_msgs_regex = [
 # 通知消息跟踪配置
 enable_notice_tracking = true
 
+# 图片/表情限流：时间窗口内每个聊天流最多处理的图片+表情数，超出则跳过 VLM/存储，避免内存爆掉
+image_rate_limit_enabled = true
+image_rate_limit_max = 10
+image_rate_limit_window_seconds = 60
+
 [message_receive.notice_dedup_windows]
 recall = 0        # 撤回消息不去重
 poke = 10         # 戳一戳 10 秒去重

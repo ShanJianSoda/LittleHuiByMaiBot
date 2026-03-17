@@ -13,6 +13,7 @@ from src.config.config import global_config
 from src.chat.utils.utils_image import get_image_manager
 from src.chat.utils.utils_voice import get_voice_text
 from .chat_stream import ChatStream
+from .image_rate_limiter import allow_image_processing, record_image_processed, get_placeholder_text
 
 install(extra_lines=3)
 
@@ -23,6 +24,20 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # VLM 处理并发限制（避免同时处理太多图片导致卡死）
 _vlm_semaphore = asyncio.Semaphore(3)
+
+
+def _get_stream_id_for_rate_limit(message: "MessageRecv") -> str:
+    """从消息信息计算 stream_id，用于图片限流等。process() 时可能尚未设置 chat_stream。"""
+    try:
+        from .chat_stream import get_chat_manager
+        return get_chat_manager()._generate_stream_id(
+            message.message_info.platform,  # type: ignore
+            message.message_info.user_info,  # type: ignore
+            message.message_info.group_info,  # type: ignore
+        )
+    except Exception as e:
+        logger.debug(f"计算 stream_id 失败，使用 unknown: {e}")
+        return "unknown"
 
 # 这个类是消息数据类，用于存储和管理消息数据。
 # 它定义了消息的属性，包括群组ID、用户ID、消息ID、原始消息内容、纯文本内容和时间戳。
@@ -191,10 +206,15 @@ class MessageRecv(Message):
                     self.has_picid = True
                     self.is_picid = True
                     self.is_emoji = False
+                    stream_id = _get_stream_id_for_rate_limit(self)
+                    if not allow_image_processing(stream_id):
+                        logger.warning(f"[图片限流] stream_id={stream_id[:16]}... 已达窗口内上限，跳过 VLM/存储")
+                        return get_placeholder_text("image")
                     image_manager = get_image_manager()
                     # 使用 semaphore 限制 VLM 并发，避免同时处理太多图片
                     async with _vlm_semaphore:
                         _, processed_text = await image_manager.process_image(segment.data)
+                    record_image_processed(stream_id)
                     return processed_text
                 return "[发了一张图片，网卡了加载不出来]"
             elif segment.type == "emoji":
@@ -203,9 +223,15 @@ class MessageRecv(Message):
                 self.is_picid = False
                 self.is_voice = False
                 if isinstance(segment.data, str):
+                    stream_id = _get_stream_id_for_rate_limit(self)
+                    if not allow_image_processing(stream_id):
+                        logger.warning(f"[图片限流] stream_id={stream_id[:16]}... 已达窗口内上限，跳过表情 VLM/存储")
+                        return get_placeholder_text("emoji")
                     # 使用 semaphore 限制 VLM 并发
                     async with _vlm_semaphore:
-                        return await get_image_manager().get_emoji_description(segment.data)
+                        out = await get_image_manager().get_emoji_description(segment.data)
+                    record_image_processed(stream_id)
+                    return out
                 return "[发了一个表情包，网卡了加载不出来]"
             elif segment.type == "voice":
                 self.is_picid = False
