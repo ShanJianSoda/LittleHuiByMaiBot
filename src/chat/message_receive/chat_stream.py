@@ -213,10 +213,7 @@ class ChatManager:
             # 检查内存中是否存在
             if stream_id in self.streams:
                 stream = self.streams[stream_id]
-
-                # 更新用户信息和群组信息
                 stream.update_active_time()
-                stream = copy.deepcopy(stream)  # 返回副本以避免外部修改影响缓存
                 if user_info and user_info.platform and user_info.user_id:
                     stream.user_info = user_info
                 if group_info:
@@ -226,7 +223,7 @@ class ChatManager:
                 if stream_id in self.last_messages and isinstance(self.last_messages[stream_id], MessageRecv):
                     stream.set_context(self.last_messages[stream_id])
                 else:
-                    logger.error(f"聊天流 {stream_id} 不在最后消息列表中，可能是新创建的")
+                    logger.debug(f"聊天流 {stream_id} 暂无最后消息上下文")
                 return stream
 
             # 检查数据库中是否存在

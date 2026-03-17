@@ -95,6 +95,10 @@ class MainSystem:
         # 添加表达方式自动检查任务
         await async_task_manager.add_task(ExpressionAutoCheckTask())
 
+        # 内存占用监控：定时输出各聊天流/缓存数量，超过阈值时 WARNING 标注
+        from src.common.memory_monitor import MemoryMonitorTask
+        await async_task_manager.add_task(MemoryMonitorTask())
+
         # 启动API服务器
         # start_api_server()
         # logger.info("API服务器启动成功")
