@@ -396,7 +396,7 @@ systemctl status bot
 ssh -L 18001:127.0.0.1:8001 root@112.124.67.104
 
 # 下载日志
-scp -r root@112.124.67.104:~/LittleHuiByMaiBot/logs/app_20260316_145658.log.jsonl C:\Users\276912\Downloads
+scp -r root@112.124.67.104:~/LittleHuiByMaiBot/logs/err.log C:\Users\276912\Downloads
 
 scp -r root@112.124.67.104:~/napcat/logs/2026-02-27_08-05-50.690.log C:\Users\276912\Downloads
 
@@ -426,3 +426,12 @@ git push origin old-version
 git reset --soft HEAD~1
 ```
 
+git stash push -m "tmmp"
+
+git pull --no-rebase origin my-changes
+
+git stash pop
+
+git add . && git commit -m "update from cloud"
+
+git push origin my-changes

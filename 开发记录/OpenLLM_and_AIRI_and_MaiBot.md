@@ -9,11 +9,11 @@ AIRI vs Open-LLM-VTuber vs MaiBot
 当前开源生态中，AI VTuber / AI 社交智能体主要出现三种不同架构路线。
 AIRI、Open-LLM-VTuber、MaiBot分别代表三种不同设计方向。
 
-| 项目            | 核心定位            | 系统类型     | 本地磁盘路径               |
-| --------------- | ------------------- | ------------ | -------------------------- |
-| AIRI            | AI数字生命 / 游戏AI | 行为型 Agent | E:\AI\airi-main            |
-| Open-LLM-VTuber | AI VTuber客户端     | UI型应用     | E:\AI\Open-LLM-VTuber-main |
-| MaiBot          | 群聊社交AI          | 社交型 Agent | E:\AI\LittleHuiByMaiBot    |
+| 项目            | 核心定位            | 系统类型     | 本地磁盘路径            |
+| --------------- | ------------------- | ------------ | ----------------------- |
+| AIRI            | AI数字生命 / 游戏AI | 行为型 Agent | E:\AI\airi-main         |
+| Open-LLM-VTuber | AI VTuber客户端     | UI型应用     | E:\AI\open-llm-vtuber   |
+| MaiBot          | 群聊社交AI          | 社交型 Agent | E:\AI\LittleHuiByMaiBot |
 
 直观类比：
 

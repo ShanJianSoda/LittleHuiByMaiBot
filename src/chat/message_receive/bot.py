@@ -425,7 +425,9 @@ class ChatBot:
                     message_data["message_info"]["user_info"]["user_id"]
                 )
             # print(message_data)
-            # logger.debug(str(message_data))
+            # 接入说明：message_data 需含 message_info / message_segment / raw_message（与 Napcat-adapter 同形）。
+            # 若 Open-LLM-VTuber 等第三方接入，构造同格式并通过 maim_message WebSocket 发送即可。详见 开发记录/VTuber与MaiBot双向接入_格式与实现.md
+            logger.debug(str(message_data))
             message = MessageRecv(message_data)
             group_info = message.message_info.group_info
             user_info = message.message_info.user_info
