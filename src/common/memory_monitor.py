@@ -5,7 +5,7 @@
 
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from src.common.logger import get_logger
 
@@ -51,7 +51,7 @@ def _safe_len(obj: Any, default: int = -1) -> int:
         return default
 
 
-def _heartflow_chat_pairs(hf: Any, limit: int = 20) -> list[tuple[Any, Any]]:
+def _heartflow_chat_pairs(hf: Any, limit: int = 20) -> List[Tuple[Any, Any]]:
     """将 heartflow_chat_list 规范为 (id, chat) 列表，兼容 dict 与非空 list。"""
     raw = getattr(hf, "heartflow_chat_list", None)
     if raw is None:
