@@ -51,6 +51,18 @@ def _safe_len(obj: Any, default: int = -1) -> int:
         return default
 
 
+def _heartflow_chat_pairs(hf: Any, limit: int = 20) -> list[tuple[Any, Any]]:
+    """将 heartflow_chat_list 规范为 (id, chat) 列表，兼容 dict 与非空 list。"""
+    raw = getattr(hf, "heartflow_chat_list", None)
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        return list(raw.items())[:limit]
+    if isinstance(raw, list):
+        return list(enumerate(raw))[:limit]
+    return []
+
+
 def get_memory_breakdown() -> Dict[str, Any]:
     """
     收集各组件与缓存的数量/长度，便于分析内存占用。
@@ -63,9 +75,8 @@ def get_memory_breakdown() -> Dict[str, Any]:
         from src.chat.heart_flow.heartflow import heartflow
         hf = heartflow
         out["heartflow_chat_count"] = _safe_len(getattr(hf, "heartflow_chat_list", None))
-        chat_list = getattr(hf, "heartflow_chat_list", None) or {}
         history_lens = []
-        for _cid, chat in list(chat_list.items())[:20]:  # 最多 20 个
+        for _cid, chat in _heartflow_chat_pairs(hf, 20):
             try:
                 history_lens.append(_safe_len(getattr(chat, "history_loop", None)))
             except Exception:
@@ -103,7 +114,7 @@ def get_memory_breakdown() -> Dict[str, Any]:
     try:
         from src.chat.heart_flow.heartflow import heartflow
         topic_counts = []
-        for _cid, chat in list(getattr(heartflow, "heartflow_chat_list", None) or {}).items():
+        for _cid, chat in _heartflow_chat_pairs(heartflow, 20):
             try:
                 summarizer = getattr(chat, "chat_history_summarizer", None)
                 if summarizer is not None:
