@@ -155,7 +155,7 @@ dream_time_ranges = [
 
 [mood]
 # 情绪系统配置
-enable_mood = true # 是否启用情绪系统
+enable_mood = false # 是否启用情绪系统
 mood_update_threshold = 1 # 情绪更新阈值，作为整体概率缩放系数，建议范围 0.1-2.0
 enable_emotion_history = true # 是否将每次情绪变更写入 emotion_history 表（曲线、熔岩灯、chat_history 情绪回溯）
 use_vad_path = true # 为 true 时情绪更新/回归走 VAD+动力学（不调 LLM），VAD 按 chat 懒加载初始为中性
